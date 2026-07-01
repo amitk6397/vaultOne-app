@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import '../../../constants/app_colors.dart';
 import '../../../constants/app_text_styles.dart';
@@ -427,7 +428,24 @@ class MediaThumbnail extends StatelessWidget {
               size: 42,
             ),
           ),
-          if (item.path != null && item.kind == MediaKind.photo)
+          if (item.assetEntity != null)
+            FutureBuilder(
+              future: item.assetEntity!.thumbnailDataWithSize(
+                const ThumbnailSize.square(360),
+              ),
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                if (bytes == null) return const SizedBox.shrink();
+                return Image.memory(
+                  bytes,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  gaplessPlayback: true,
+                );
+              },
+            )
+          else if (item.path != null && item.kind == MediaKind.photo)
             Image.file(
               File(item.path!),
               fit: BoxFit.cover,

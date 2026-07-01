@@ -10,6 +10,9 @@ import '../features/auth/views/register_page.dart';
 import '../features/auth/views/splash_screen.dart';
 import '../features/auth/views/verify_otp_page.dart';
 import '../features/documents/views/documents_page.dart';
+import '../features/documents/views/document_alerts_page.dart';
+import '../features/documents/views/document_folder_page.dart';
+import '../features/documents/views/document_preview_page.dart';
 import '../features/files_vault/views/files_vault_page.dart';
 import '../features/home/views/home_page_redesigned.dart';
 import '../features/media/models/media_item.dart';
@@ -95,6 +98,32 @@ final appRouter = GoRouter(
           _fadePage(state: state, child: const DocumentsPage()),
     ),
     GoRoute(
+      name: AppRoutes.documentFolderName,
+      path: AppRoutes.documentFolderPath,
+      pageBuilder: (context, state) => _fadePage(
+        state: state,
+        child: DocumentFolderPage(
+          folderId: state.pathParameters['folderId'] ?? '',
+        ),
+      ),
+    ),
+    GoRoute(
+      name: AppRoutes.documentPreviewName,
+      path: AppRoutes.documentPreviewPath,
+      pageBuilder: (context, state) => _fadePage(
+        state: state,
+        child: DocumentPreviewPage(
+          documentId: state.pathParameters['documentId'] ?? '',
+        ),
+      ),
+    ),
+    GoRoute(
+      name: AppRoutes.documentAlertsName,
+      path: AppRoutes.documentAlertsPath,
+      pageBuilder: (context, state) =>
+          _fadePage(state: state, child: const DocumentAlertsPage()),
+    ),
+    GoRoute(
       name: AppRoutes.aiName,
       path: AppRoutes.aiPath,
       pageBuilder: (context, state) =>
@@ -109,8 +138,10 @@ final appRouter = GoRouter(
     GoRoute(
       name: AppRoutes.addEditPasswordName,
       path: AppRoutes.addEditPasswordPath,
-      pageBuilder: (context, state) =>
-          _fadePage(state: state, child: const AddEditPasswordPage()),
+      pageBuilder: (context, state) => _fadePage(
+        state: state,
+        child: AddEditPasswordPage(passwordId: state.uri.queryParameters['id']),
+      ),
     ),
     GoRoute(
       name: AppRoutes.passwordGeneratorName,

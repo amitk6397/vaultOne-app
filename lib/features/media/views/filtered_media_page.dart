@@ -12,7 +12,7 @@ class FilteredMediaPage extends ConsumerWidget {
     required this.title,
     required this.subtitle,
     required this.icon,
-    required this.kind,
+    this.kind,
     this.visibility,
     this.albumId,
     this.folderName,
@@ -21,7 +21,7 @@ class FilteredMediaPage extends ConsumerWidget {
   final String title;
   final String subtitle;
   final IconData icon;
-  final MediaKind kind;
+  final MediaKind? kind;
   final MediaVisibility? visibility;
   final String? albumId;
   final String? folderName;
@@ -42,13 +42,15 @@ class FilteredMediaPage extends ConsumerWidget {
       subtitle: subtitle,
       icon: icon,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => importMedia(context, ref, kind),
+        onPressed: () => kind == null
+            ? controller.scanAllDeviceMedia(force: true)
+            : importMedia(context, ref, kind!),
         icon: Icon(
           kind == MediaKind.photo
               ? Icons.add_photo_alternate_rounded
               : Icons.video_call_rounded,
         ),
-        label: const Text('Import'),
+        label: Text(kind == null ? 'Refresh' : 'Import'),
       ),
       children: [
         MediaSearchAndFilters(

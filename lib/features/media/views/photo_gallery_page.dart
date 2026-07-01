@@ -6,6 +6,7 @@ import '../../../routes/app_routes.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
 import '../widgets/media_widgets.dart';
+import 'filtered_media_page.dart';
 import 'media_actions.dart';
 
 class PhotoGalleryPage extends ConsumerStatefulWidget {
@@ -20,9 +21,7 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
   void initState() {
     super.initState();
     Future.microtask(
-      () => ref
-          .read(mediaLibraryProvider.notifier)
-          .scanDeviceMedia(MediaKind.photo),
+      () => ref.read(mediaLibraryProvider.notifier).scanAllDeviceMedia(),
     );
   }
 
@@ -31,7 +30,7 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
     final state = ref.watch(mediaLibraryProvider);
     final controller = ref.read(mediaLibraryProvider.notifier);
     final items = controller.visibleItems(kind: MediaKind.photo);
-    final folders = controller.photoFolders();
+    final folders = controller.mediaFolders();
 
     return MediaPageShell(
       title: 'Photos',
@@ -49,8 +48,7 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
         ),
       ],
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            controller.scanDeviceMedia(MediaKind.photo, force: true),
+        onPressed: () => controller.scanAllDeviceMedia(force: true),
         icon: const Icon(Icons.add_photo_alternate_rounded),
         label: const Text('Refresh'),
       ),
@@ -59,7 +57,8 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
           const _PermissionCard()
         else if (state.isLoading)
           const LoadingSkeletonGrid(),
-        if (state.permissionDenied || state.isLoading) const SizedBox(height: 16),
+        if (state.permissionDenied || state.isLoading)
+          const SizedBox(height: 16),
         MediaSearchAndFilters(
           query: state.query,
           sort: state.sort,
@@ -102,7 +101,7 @@ class _PermissionCard extends StatelessWidget {
 class _FolderStrip extends StatelessWidget {
   const _FolderStrip({required this.folders});
 
-  final List<String> folders;
+  final List<MediaFolderSummary> folders;
 
   @override
   Widget build(BuildContext context) {
@@ -125,8 +124,22 @@ class _FolderStrip extends StatelessWidget {
               final folder = folders[index];
               return ActionChip(
                 avatar: const Icon(Icons.folder_rounded),
-                label: Text(folder),
-                onPressed: () {},
+                label: Text(
+                  '${folder.name} (${folder.photoCount}P/${folder.videoCount}V)',
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => FilteredMediaPage(
+                        title: folder.name,
+                        subtitle:
+                            '${folder.photoCount} photos, ${folder.videoCount} videos',
+                        icon: Icons.folder_open_rounded,
+                        folderName: folder.name,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),

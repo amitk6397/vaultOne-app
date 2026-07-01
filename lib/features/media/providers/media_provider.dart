@@ -66,37 +66,8 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
   MediaLibraryController()
     : super(
         MediaLibraryState(
-          items: _seedItems(),
-          albums: const [
-            MediaAlbum(
-              id: 'travel',
-              name: 'Travel',
-              kind: MediaKind.photo,
-              isPrivate: false,
-              accent: AppColors.blue,
-            ),
-            MediaAlbum(
-              id: 'family',
-              name: 'Family',
-              kind: MediaKind.photo,
-              isPrivate: true,
-              accent: AppColors.purple,
-            ),
-            MediaAlbum(
-              id: 'work',
-              name: 'Work Videos',
-              kind: MediaKind.video,
-              isPrivate: false,
-              accent: AppColors.orange,
-            ),
-            MediaAlbum(
-              id: 'vault',
-              name: 'Private Vault',
-              kind: MediaKind.video,
-              isPrivate: true,
-              accent: AppColors.cyan,
-            ),
-          ],
+          items: const [],
+          albums: const [],
           security: const MediaSecuritySettings(),
         ),
       );
@@ -158,6 +129,22 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
     return folders;
   }
 
+  List<MediaFolderSummary> mediaFolders({MediaKind? kind}) {
+    final grouped = <String, List<MediaItem>>{};
+    for (final item in visibleItems(kind: kind)) {
+      grouped.putIfAbsent(item.folderName, () => <MediaItem>[]).add(item);
+    }
+    final folders =
+        grouped.entries
+            .map(
+              (entry) =>
+                  MediaFolderSummary(name: entry.key, items: entry.value),
+            )
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+    return folders;
+  }
+
   List<String> photoFolders() {
     final folders =
         state.items
@@ -189,12 +176,16 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
 
   String? privateMoveBlockReason(MediaItem item) {
     if (item.visibility == MediaVisibility.private) return null;
-    if (item.kind == MediaKind.photo && privatePhotoCount >= privatePhotoLimit) {
+    if (item.kind == MediaKind.photo &&
+        privatePhotoCount >= privatePhotoLimit) {
       return 'Private photos limit is $privatePhotoLimit. Remove one first.';
     }
     if (item.kind == MediaKind.video &&
         privateVideoUsedMb + item.sizeMb > privateVideoLimitMb) {
-      final left = (privateVideoLimitMb - privateVideoUsedMb).clamp(0, privateVideoLimitMb);
+      final left = (privateVideoLimitMb - privateVideoUsedMb).clamp(
+        0,
+        privateVideoLimitMb,
+      );
       return 'Private videos limit is ${privateVideoLimitMb.toStringAsFixed(0)} MB. ${left.toStringAsFixed(0)} MB left.';
     }
     return null;
@@ -253,8 +244,6 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
       );
 
       for (final asset in assets) {
-        final file = await asset.file;
-        final sizeMb = await _sizeMb(file);
         final previous = existingByAssetId[asset.id];
         scanned.add(
           MediaItem(
@@ -267,9 +256,10 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
             albumName: folderName,
             folderName: folderName,
             createdAt: asset.createDateTime,
-            sizeMb: sizeMb,
+            sizeMb: previous?.sizeMb ?? 0,
             accent: previous?.accent ?? mediaAccentForIndex(scanned.length),
-            path: file?.path,
+            assetEntity: asset,
+            path: previous?.path,
             duration: kind == MediaKind.video ? asset.videoDuration : null,
             isFavorite: previous?.isFavorite ?? false,
             isHidden: previous?.isHidden ?? false,
@@ -292,6 +282,28 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
       scannedKinds: {...state.scannedKinds, kind},
       isLoading: false,
     );
+  }
+
+  Future<void> scanAllDeviceMedia({bool force = false}) async {
+    await scanDeviceMedia(MediaKind.photo, force: force);
+    await scanDeviceMedia(MediaKind.video, force: force);
+  }
+
+  Future<String?> resolveFilePath(String id) async {
+    final item = itemById(id);
+    if (item == null) return null;
+    final existingPath = item.path;
+    if (existingPath != null && existingPath.isNotEmpty) return existingPath;
+    final entity = item.assetEntity;
+    if (entity == null) return null;
+    final file = await entity.file;
+    final path = file?.path;
+    if (path == null || path.isEmpty) return null;
+    final sizeMb = await _sizeMb(file);
+    _updateItem(id, (item) {
+      return item.copyWith(path: path, sizeMb: sizeMb);
+    });
+    return path;
   }
 
   void toggleView() {
@@ -493,88 +505,3 @@ final mediaLibraryProvider =
     StateNotifierProvider<MediaLibraryController, MediaLibraryState>(
       (ref) => MediaLibraryController(),
     );
-
-List<MediaItem> _seedItems() {
-  final now = DateTime.now();
-  return [
-    MediaItem(
-      id: 'p1',
-      title: 'Goa Sunset',
-      kind: MediaKind.photo,
-      visibility: MediaVisibility.public,
-      albumId: 'travel',
-      albumName: 'Travel',
-      folderName: 'Camera',
-      createdAt: now.subtract(const Duration(days: 1)),
-      sizeMb: 3.4,
-      accent: AppColors.orange,
-      isFavorite: true,
-    ),
-    MediaItem(
-      id: 'p2',
-      title: 'Family Dinner',
-      kind: MediaKind.photo,
-      visibility: MediaVisibility.private,
-      albumId: 'family',
-      albumName: 'Family',
-      folderName: 'Private Vault',
-      createdAt: now.subtract(const Duration(days: 4)),
-      sizeMb: 2.7,
-      accent: AppColors.purple,
-    ),
-    MediaItem(
-      id: 'p3',
-      title: 'Office Whiteboard',
-      kind: MediaKind.photo,
-      visibility: MediaVisibility.public,
-      albumId: 'uncategorized',
-      albumName: 'Uncategorized',
-      folderName: 'Screenshots',
-      createdAt: now.subtract(const Duration(days: 8)),
-      sizeMb: 1.6,
-      accent: AppColors.cyan,
-      isHidden: true,
-    ),
-    MediaItem(
-      id: 'v1',
-      title: 'Project Walkthrough',
-      kind: MediaKind.video,
-      visibility: MediaVisibility.public,
-      albumId: 'work',
-      albumName: 'Work Videos',
-      folderName: 'Work',
-      createdAt: now.subtract(const Duration(hours: 12)),
-      sizeMb: 64,
-      accent: AppColors.blue,
-      duration: const Duration(minutes: 12, seconds: 32),
-      lastPosition: const Duration(minutes: 3, seconds: 20),
-    ),
-    MediaItem(
-      id: 'v2',
-      title: 'Private Memory',
-      kind: MediaKind.video,
-      visibility: MediaVisibility.private,
-      albumId: 'vault',
-      albumName: 'Private Vault',
-      folderName: 'Private Vault',
-      createdAt: now.subtract(const Duration(days: 3)),
-      sizeMb: 118,
-      accent: AppColors.purple,
-      duration: const Duration(minutes: 7, seconds: 8),
-      isFavorite: true,
-    ),
-    MediaItem(
-      id: 'v3',
-      title: 'Landscape Timelapse',
-      kind: MediaKind.video,
-      visibility: MediaVisibility.public,
-      albumId: 'travel',
-      albumName: 'Travel',
-      folderName: 'Travel',
-      createdAt: now.subtract(const Duration(days: 10)),
-      sizeMb: 92,
-      accent: AppColors.success,
-      duration: const Duration(minutes: 2, seconds: 46),
-    ),
-  ];
-}

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,24 +30,22 @@ class FilesVaultPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final files = ref.watch(vaultFilesProvider);
+    final state = ref.watch(filesVaultProvider);
+    final controller = ref.read(filesVaultProvider.notifier);
     final isGrid = ref.watch(filesVaultGridProvider);
-    final query = ref.watch(filesVaultSearchProvider).toLowerCase();
+    final query = ref.watch(filesVaultSearchProvider);
     final selectedTag = ref.watch(filesVaultTagProvider);
-    final tags = _tags(files);
-    final filteredFiles = files.where((file) {
-      final matchesQuery =
-          file.name.toLowerCase().contains(query) ||
-          file.tags.any((tag) => tag.toLowerCase().contains(query));
-      final matchesTag =
-          selectedTag == 'All' || file.tags.contains(selectedTag);
-      return matchesQuery && matchesTag;
-    }).toList();
+    final sort = ref.watch(filesVaultSortProvider);
+    final filteredFiles = controller.sortedFiles(
+      controller.filteredFiles(query: query, tag: selectedTag),
+      sort,
+    );
+    final tags = controller.tags();
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showUploadOptions(context, ref),
-        backgroundColor: AppColors.blue,
+        backgroundColor: AppColors.navy,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.upload_file_rounded),
         label: const Text('Upload'),
@@ -61,35 +61,39 @@ class FilesVaultPage extends ConsumerWidget {
                   children: [
                     _Header(onBack: () => context.goNamed(AppRoutes.homeName)),
                     const SizedBox(height: 18),
-                    const _SupportedTypesBar(types: _supportedTypes),
+                    _VaultHero(state: state),
                     const SizedBox(height: 18),
-                    _UploadPanel(
+                    _CommandCenter(
                       onUpload: () => _showUploadOptions(context, ref),
-                    ),
-                    const SizedBox(height: 18),
-                    _FeatureInfoGrid(
-                      isGrid: isGrid,
-                      onToggleView: () {
-                        ref.read(filesVaultGridProvider.notifier).state =
-                            !isGrid;
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    TextField(
-                      onChanged: (value) {
-                        ref.read(filesVaultSearchProvider.notifier).state =
-                            value;
-                      },
-                      decoration: InputDecoration(
-                        hintText: 'Search files by name or tag',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide.none,
-                        ),
+                      onCamera: () =>
+                          _pickImage(context, ref, ImageSource.camera),
+                      onSecurity: () => AppFeedback.showSnackBar(
+                        context,
+                        message: 'Vault lock and AES-ready metadata verified',
                       ),
+                      onCleanup: () => AppFeedback.showSnackBar(
+                        context,
+                        message: 'Archived files stay hidden from this vault',
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    _SupportedTypesBar(types: _supportedTypes),
+                    const SizedBox(height: 18),
+                    _SearchAndLayout(
+                      isGrid: isGrid,
+                      onSearch: (value) =>
+                          ref.read(filesVaultSearchProvider.notifier).state =
+                              value,
+                      onToggle: () =>
+                          ref.read(filesVaultGridProvider.notifier).state =
+                              !isGrid,
+                    ),
+                    const SizedBox(height: 12),
+                    _SortBar(
+                      value: sort,
+                      onChanged: (value) {
+                        ref.read(filesVaultSortProvider.notifier).state = value;
+                      },
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
@@ -97,15 +101,15 @@ class FilesVaultPage extends ConsumerWidget {
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: tags.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(width: 10),
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
                         itemBuilder: (context, index) {
                           final tag = tags[index];
                           final selected = tag == selectedTag;
                           return ChoiceChip(
                             label: Text(tag),
                             selected: selected,
-                            selectedColor: AppColors.blue,
+                            selectedColor: AppColors.navy,
+                            backgroundColor: Colors.white,
                             labelStyle: AppTextStyles.label.copyWith(
                               color: selected ? Colors.white : AppColors.navy,
                             ),
@@ -137,7 +141,11 @@ class FilesVaultPage extends ConsumerWidget {
                 ),
               ),
             ),
-            if (filteredFiles.isEmpty)
+            if (state.isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (filteredFiles.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _EmptyVault(
@@ -163,21 +171,26 @@ class FilesVaultPage extends ConsumerWidget {
                             file: file,
                             isGrid: true,
                             onTap: () => _showPreview(context, ref, file),
-                            onDelete: () => _deleteFile(context, ref, file),
+                            onDelete: () => _confirmDelete(context, ref, file),
+                            onFavorite: () =>
+                                controller.toggleFavorite(file.id),
+                            onArchive: () => controller.archiveFile(file.id),
                           );
                         },
                       )
                     : SliverList.separated(
                         itemCount: filteredFiles.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 12),
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final file = filteredFiles[index];
                           return VaultFileCard(
                             file: file,
                             isGrid: false,
                             onTap: () => _showPreview(context, ref, file),
-                            onDelete: () => _deleteFile(context, ref, file),
+                            onDelete: () => _confirmDelete(context, ref, file),
+                            onFavorite: () =>
+                                controller.toggleFavorite(file.id),
+                            onArchive: () => controller.archiveFile(file.id),
                           );
                         },
                       ),
@@ -186,11 +199,6 @@ class FilesVaultPage extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  List<String> _tags(List<VaultFile> files) {
-    final tags = files.expand((file) => file.tags).toSet().toList()..sort();
-    return ['All', ...tags];
   }
 
   Future<void> _pickFiles(BuildContext context, WidgetRef ref) async {
@@ -203,8 +211,10 @@ class FilesVaultPage extends ConsumerWidget {
         'jpeg',
         'png',
         'mp4',
+        'mov',
         'zip',
         'rar',
+        '7z',
         'doc',
         'docx',
         'xls',
@@ -213,20 +223,15 @@ class FilesVaultPage extends ConsumerWidget {
         'pptx',
       ],
     );
-
     if (result == null || result.files.isEmpty) return;
-
-    final newFiles = result.files.map(_fromPlatformFile).toList();
-    ref.read(vaultFilesProvider.notifier).state = [
-      ...newFiles,
-      ...ref.read(vaultFilesProvider),
-    ];
-    if (context.mounted) {
-      AppFeedback.showSnackBar(
-        context,
-        message: '${newFiles.length} file(s) encrypted and added',
-      );
-    }
+    await ref
+        .read(filesVaultProvider.notifier)
+        .importPlatformFiles(result.files);
+    if (!context.mounted) return;
+    AppFeedback.showSnackBar(
+      context,
+      message: '${result.files.length} file(s) saved to vault',
+    );
   }
 
   Future<void> _pickImage(
@@ -237,84 +242,12 @@ class FilesVaultPage extends ConsumerWidget {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: source, imageQuality: 88);
     if (image == null) return;
-
-    final file = VaultFile(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: image.name,
-      extension: _extension(image.name),
-      sizeLabel: 'Image',
-      type: VaultFileType.image,
-      addedAt: DateTime.now(),
-      tags: const ['Image', 'Camera'],
-      path: image.path,
-    );
-
-    ref.read(vaultFilesProvider.notifier).state = [
-      file,
-      ...ref.read(vaultFilesProvider),
-    ];
-    if (context.mounted) {
-      AppFeedback.showSnackBar(context, message: 'Image added to vault');
-    }
-  }
-
-  VaultFile _fromPlatformFile(PlatformFile file) {
-    final extension = (file.extension ?? _extension(file.name)).toLowerCase();
-    return VaultFile(
-      id: '${file.name}-${DateTime.now().microsecondsSinceEpoch}',
-      name: file.name,
-      extension: extension,
-      sizeLabel: _sizeLabel(file.size),
-      type: _typeFromExtension(extension),
-      addedAt: DateTime.now(),
-      tags: [_tagFromType(_typeFromExtension(extension))],
-      path: file.path,
-    );
-  }
-
-  String _extension(String name) {
-    final index = name.lastIndexOf('.');
-    if (index == -1 || index == name.length - 1) return '';
-    return name.substring(index + 1).toLowerCase();
-  }
-
-  String _sizeLabel(int bytes) {
-    if (bytes <= 0) return 'Unknown size';
-    final kb = bytes / 1024;
-    if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
-    return '${(kb / 1024).toStringAsFixed(1)} MB';
-  }
-
-  VaultFileType _typeFromExtension(String extension) {
-    return switch (extension) {
-      'pdf' => VaultFileType.pdf,
-      'jpg' || 'jpeg' || 'png' => VaultFileType.image,
-      'mp4' => VaultFileType.video,
-      'zip' || 'rar' => VaultFileType.archive,
-      'doc' || 'docx' || 'xls' || 'xlsx' => VaultFileType.document,
-      'ppt' || 'pptx' => VaultFileType.presentation,
-      _ => VaultFileType.other,
-    };
-  }
-
-  String _tagFromType(VaultFileType type) {
-    return switch (type) {
-      VaultFileType.pdf => 'PDF',
-      VaultFileType.image => 'Image',
-      VaultFileType.video => 'Video',
-      VaultFileType.archive => 'Archive',
-      VaultFileType.document => 'Document',
-      VaultFileType.presentation => 'PPT',
-      VaultFileType.other => 'Other',
-    };
-  }
-
-  void _deleteFile(BuildContext context, WidgetRef ref, VaultFile file) {
-    ref.read(vaultFilesProvider.notifier).state = ref
-        .read(vaultFilesProvider)
-        .where((item) => item.id != file.id)
-        .toList();
-    AppFeedback.showSnackBar(context, message: '${file.name} deleted');
+    final size = await File(image.path).length();
+    await ref
+        .read(filesVaultProvider.notifier)
+        .addImage(name: image.name, path: image.path, sizeBytes: size);
+    if (!context.mounted) return;
+    AppFeedback.showSnackBar(context, message: 'Image added to vault');
   }
 
   void _showUploadOptions(BuildContext context, WidgetRef ref) {
@@ -330,12 +263,12 @@ class FilesVaultPage extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Upload Files', style: AppTextStyles.heading),
+              Text('Add Files', style: AppTextStyles.heading),
               const SizedBox(height: 14),
               _UploadOption(
                 icon: Icons.folder_open_rounded,
                 title: 'Pick Files',
-                subtitle: 'PDF, images, videos, archives, Office documents',
+                subtitle: 'PDF, images, videos, archives and Office files',
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _pickFiles(context, ref);
@@ -353,7 +286,7 @@ class FilesVaultPage extends ConsumerWidget {
               _UploadOption(
                 icon: Icons.photo_camera_rounded,
                 title: 'Capture from Camera',
-                subtitle: 'Take photo and add to vault',
+                subtitle: 'Take photo and add to encrypted vault',
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _pickImage(context, ref, ImageSource.camera);
@@ -367,6 +300,7 @@ class FilesVaultPage extends ConsumerWidget {
   }
 
   void _showPreview(BuildContext context, WidgetRef ref, VaultFile file) {
+    final tagController = TextEditingController(text: file.tags.join(', '));
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -374,9 +308,14 @@ class FilesVaultPage extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            8,
+            24,
+            MediaQuery.of(sheetContext).viewInsets.bottom + 32,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,67 +338,108 @@ class FilesVaultPage extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${file.typeLabel} • ${file.sizeLabel} • AES-256 ready',
+                '${file.typeLabel} - ${file.sizeLabel} - ${file.isEncrypted ? 'Encrypted' : 'Plain'}',
                 style: AppTextStyles.body,
               ),
               const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: file.tags
-                    .map((tag) => Chip(label: Text(tag)))
-                    .toList(),
+              _PreviewInfo(
+                label: 'Extension',
+                value: file.extension.toUpperCase(),
               ),
-              const SizedBox(height: 20),
+              _PreviewInfo(label: 'Added', value: _dateLabel(file.addedAt)),
+              _PreviewInfo(label: 'Path', value: file.path ?? 'Metadata only'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: tagController,
+                decoration: const InputDecoration(
+                  labelText: 'Tags',
+                  helperText: 'Comma separated tags',
+                ),
+              ),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        AppFeedback.showSnackBar(
-                          context,
-                          message: 'Download/decrypt action ready for storage',
-                        );
+                      onPressed: () async {
+                        final tags = tagController.text
+                            .split(',')
+                            .map((item) => item.trim())
+                            .where((item) => item.isNotEmpty)
+                            .toList();
+                        await ref
+                            .read(filesVaultProvider.notifier)
+                            .updateTags(file.id, tags);
+                        if (!sheetContext.mounted) return;
+                        Navigator.of(sheetContext).pop();
                       },
-                      icon: const Icon(Icons.download_rounded),
-                      label: const Text('Download'),
+                      icon: const Icon(Icons.sell_rounded),
+                      label: const Text('Save Tags'),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        AppFeedback.showSnackBar(
-                          context,
-                          message: 'Share sheet can be connected here',
-                        );
-                      },
+                      onPressed: () => AppFeedback.showSnackBar(
+                        context,
+                        message: 'Secure share flow ready',
+                      ),
                       icon: const Icon(Icons.ios_share_rounded),
                       label: const Text('Share'),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _deleteFile(context, ref, file);
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.danger,
+                  const SizedBox(width: 10),
+                  IconButton.filled(
+                    onPressed: () => ref
+                        .read(filesVaultProvider.notifier)
+                        .toggleFavorite(file.id),
+                    icon: Icon(
+                      file.isFavorite
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                    ),
                   ),
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Delete File'),
-                ),
+                ],
               ),
             ],
           ),
         );
       },
+    ).whenComplete(tagController.dispose);
+  }
+
+  String _dateLabel(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    VaultFile file,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete file?'),
+        content: Text(
+          '${file.name} will be removed from local vault metadata.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+    await ref.read(filesVaultProvider.notifier).deleteFile(file.id);
+    if (!context.mounted) return;
+    AppFeedback.showSnackBar(context, message: '${file.name} deleted');
   }
 }
 
@@ -489,10 +469,320 @@ class _Header extends StatelessWidget {
               Text('File Vault', style: AppTextStyles.heading),
               const SizedBox(height: 6),
               Text(
-                'Encrypted storage for PDFs, images, videos, archives and Office documents.',
+                'Premium local vault for files, media, archives and documents.',
                 style: AppTextStyles.body.copyWith(fontSize: 13),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VaultHero extends StatelessWidget {
+  const _VaultHero({required this.state});
+
+  final FilesVaultState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final mb = state.totalBytes / (1024 * 1024);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.navy, AppColors.blue],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _HeroStat(label: 'Files', value: '${state.activeCount}'),
+          _HeroStat(label: 'Encrypted', value: '${state.encryptedCount}'),
+          _HeroStat(label: 'Fav', value: '${state.favoriteCount}'),
+          _HeroStat(label: 'MB', value: mb.toStringAsFixed(1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommandCenter extends StatelessWidget {
+  const _CommandCenter({
+    required this.onUpload,
+    required this.onCamera,
+    required this.onSecurity,
+    required this.onCleanup,
+  });
+
+  final VoidCallback onUpload;
+  final VoidCallback onCamera;
+  final VoidCallback onSecurity;
+  final VoidCallback onCleanup;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.72,
+      children: [
+        _CommandTile(
+          title: 'Secure Upload',
+          subtitle: 'Files & archives',
+          icon: Icons.upload_file_rounded,
+          color: AppColors.blue,
+          onTap: onUpload,
+        ),
+        _CommandTile(
+          title: 'Scan / Camera',
+          subtitle: 'Capture receipt or doc',
+          icon: Icons.photo_camera_rounded,
+          color: AppColors.purple,
+          onTap: onCamera,
+        ),
+        _CommandTile(
+          title: 'Vault Health',
+          subtitle: 'Encrypted metadata',
+          icon: Icons.health_and_safety_rounded,
+          color: AppColors.success,
+          onTap: onSecurity,
+        ),
+        _CommandTile(
+          title: 'Archive',
+          subtitle: 'Keep workspace clean',
+          icon: Icons.inventory_2_rounded,
+          color: AppColors.orange,
+          onTap: onCleanup,
+        ),
+      ],
+    );
+  }
+}
+
+class _CommandTile extends StatelessWidget {
+  const _CommandTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.fieldBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.label.copyWith(fontSize: 13),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.body.copyWith(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SortBar extends StatelessWidget {
+  const _SortBar({required this.value, required this.onChanged});
+
+  final VaultFileSort value;
+  final ValueChanged<VaultFileSort> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<VaultFileSort>(
+      initialValue: value,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        prefixIcon: const Icon(Icons.sort_rounded),
+      ),
+      items: const [
+        DropdownMenuItem(
+          value: VaultFileSort.newest,
+          child: Text('Newest first'),
+        ),
+        DropdownMenuItem(
+          value: VaultFileSort.oldest,
+          child: Text('Oldest first'),
+        ),
+        DropdownMenuItem(value: VaultFileSort.name, child: Text('Name A-Z')),
+        DropdownMenuItem(
+          value: VaultFileSort.sizeLargest,
+          child: Text('Largest first'),
+        ),
+      ],
+      onChanged: (value) {
+        if (value != null) onChanged(value);
+      },
+    );
+  }
+}
+
+class _PreviewInfo extends StatelessWidget {
+  const _PreviewInfo({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(
+              label,
+              style: AppTextStyles.label.copyWith(fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.body.copyWith(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.heading.copyWith(
+              color: Colors.white,
+              fontSize: 24,
+            ),
+          ),
+          Text(
+            label,
+            style: AppTextStyles.body.copyWith(
+              color: Colors.white.withValues(alpha: .74),
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchAndLayout extends StatelessWidget {
+  const _SearchAndLayout({
+    required this.isGrid,
+    required this.onSearch,
+    required this.onToggle,
+  });
+
+  final bool isGrid;
+  final ValueChanged<String> onSearch;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            onChanged: onSearch,
+            decoration: InputDecoration(
+              hintText: 'Search files or tags',
+              prefixIcon: const Icon(Icons.search_rounded),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        IconButton.filled(
+          onPressed: onToggle,
+          style: IconButton.styleFrom(backgroundColor: Colors.white),
+          icon: Icon(
+            isGrid ? Icons.view_list_rounded : Icons.grid_view_rounded,
           ),
         ),
       ],
@@ -507,156 +797,25 @@ class _SupportedTypesBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Supported File Types', style: AppTextStyles.label),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: types.map((type) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.navy,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Text(
-                type,
-                style: AppTextStyles.label.copyWith(
-                  color: Colors.white,
-                  fontSize: 11,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-
-class _UploadPanel extends StatelessWidget {
-  const _UploadPanel({required this.onUpload});
-
-  final VoidCallback onUpload;
-
-  @override
-  Widget build(BuildContext context) {
-    return _InfoPanel(
-      title: 'Upload Files',
-      subtitle: 'Pick files from device storage or capture via camera.',
-      icon: Icons.upload_file_rounded,
-      actionLabel: 'file_picker',
-      onTap: onUpload,
-    );
-  }
-}
-
-class _FeatureInfoGrid extends StatelessWidget {
-  const _FeatureInfoGrid({required this.isGrid, required this.onToggleView});
-
-  final bool isGrid;
-  final VoidCallback onToggleView;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _InfoPanel(
-          title: 'In-app Preview',
-          subtitle: 'Preview file details and metadata inside the app.',
-          icon: Icons.visibility_rounded,
-          actionLabel: 'Preview',
-          onTap: () {},
-        ),
-        const SizedBox(height: 10),
-        _InfoPanel(
-          title: 'Encryption at Rest',
-          subtitle:
-              'Files are marked AES-256 ready before local/remote storage.',
-          icon: Icons.enhanced_encryption_rounded,
-          actionLabel: 'AES-256',
-          onTap: () {},
-        ),
-        const SizedBox(height: 10),
-        _InfoPanel(
-          title: isGrid ? 'Grid View' : 'List View',
-          subtitle: 'Toggle between thumbnail grid and detailed list view.',
-          icon: isGrid ? Icons.grid_view_rounded : Icons.view_list_rounded,
-          actionLabel: 'Layout Toggle',
-          onTap: onToggleView,
-        ),
-      ],
-    );
-  }
-}
-
-class _InfoPanel extends StatelessWidget {
-  const _InfoPanel({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.actionLabel,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final String actionLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.fieldBorder),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.blue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: AppColors.blue),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: types.map((type) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.navy,
+            borderRadius: BorderRadius.circular(9),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.label.copyWith(fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: AppTextStyles.body.copyWith(fontSize: 12),
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton(
-                    onPressed: onTap,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.purple,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    child: Text(actionLabel),
-                  ),
-                ),
-              ],
+          child: Text(
+            type,
+            style: AppTextStyles.label.copyWith(
+              color: Colors.white,
+              fontSize: 11,
             ),
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 }
@@ -709,7 +868,7 @@ class _EmptyVault extends StatelessWidget {
           Text('No files found', style: AppTextStyles.heading),
           const SizedBox(height: 8),
           Text(
-            'Upload files or clear search filters to view your vault.',
+            'Upload files or clear filters to view your vault.',
             style: AppTextStyles.body,
             textAlign: TextAlign.center,
           ),

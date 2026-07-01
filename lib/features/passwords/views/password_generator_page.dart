@@ -22,9 +22,18 @@ class PasswordGeneratorPage extends ConsumerWidget {
     final numbers = ref.watch(includeNumbersProvider);
     final uppercase = ref.watch(includeUppercaseProvider);
 
+    void regenerate() {
+      ref.read(generatedPasswordProvider.notifier).state = generatePassword(
+        length: ref.read(passwordLengthProvider).round(),
+        includeSymbols: ref.read(includeSymbolsProvider),
+        includeNumbers: ref.read(includeNumbersProvider),
+        includeUppercase: ref.read(includeUppercaseProvider),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,7 +47,7 @@ class PasswordGeneratorPage extends ConsumerWidget {
               Text('Password Generator', style: AppTextStyles.heading),
               const SizedBox(height: 8),
               Text(
-                'Configure length, symbols, numbers, and uppercase toggles.',
+                'Create high-entropy passwords using secure random.',
                 style: AppTextStyles.body,
               ),
               const SizedBox(height: 24),
@@ -46,19 +55,46 @@ class PasswordGeneratorPage extends ConsumerWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.fieldBorder),
+                  gradient: const LinearGradient(
+                    colors: [AppColors.navy, AppColors.purple],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SelectableText(
                       password,
-                      style: AppTextStyles.heading.copyWith(fontSize: 24),
+                      style: AppTextStyles.heading.copyWith(
+                        fontSize: 24,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(height: 18),
                     PasswordStrengthBar(password: password),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        FilledButton.icon(
+                          onPressed: regenerate,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Regenerate'),
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton.filled(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: password));
+                            AppFeedback.showSnackBar(
+                              context,
+                              message: 'Password copied',
+                            );
+                          },
+                          icon: const Icon(Icons.copy_rounded),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -67,34 +103,38 @@ class PasswordGeneratorPage extends ConsumerWidget {
               Slider(
                 value: length,
                 min: 8,
-                max: 32,
-                divisions: 24,
+                max: 40,
+                divisions: 32,
                 onChanged: (value) {
                   ref.read(passwordLengthProvider.notifier).state = value;
+                  regenerate();
                 },
               ),
-              SwitchListTile(
+              _SwitchTile(
                 value: symbols,
-                title: const Text('Include symbols'),
+                title: 'Include symbols',
                 onChanged: (value) {
                   ref.read(includeSymbolsProvider.notifier).state = value;
+                  regenerate();
                 },
               ),
-              SwitchListTile(
+              _SwitchTile(
                 value: numbers,
-                title: const Text('Include numbers'),
+                title: 'Include numbers',
                 onChanged: (value) {
                   ref.read(includeNumbersProvider.notifier).state = value;
+                  regenerate();
                 },
               ),
-              SwitchListTile(
+              _SwitchTile(
                 value: uppercase,
-                title: const Text('Include uppercase'),
+                title: 'Include uppercase',
                 onChanged: (value) {
                   ref.read(includeUppercaseProvider.notifier).state = value;
+                  regenerate();
                 },
               ),
-              const Spacer(),
+              const SizedBox(height: 28),
               AppPrimaryButton(
                 label: 'Copy Password',
                 onPressed: () {
@@ -106,6 +146,29 @@ class PasswordGeneratorPage extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SwitchTile extends StatelessWidget {
+  const _SwitchTile({
+    required this.value,
+    required this.title,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String title;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: value,
+      title: Text(title, style: AppTextStyles.label),
+      onChanged: onChanged,
+      tileColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 }

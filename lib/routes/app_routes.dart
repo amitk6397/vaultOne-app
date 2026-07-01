@@ -27,6 +27,12 @@ class AppRoutes {
 
   static const documentsName = 'documents';
   static const documentsPath = '/documents';
+  static const documentFolderName = 'document-folder';
+  static const documentFolderPath = '/documents/folder/:folderId';
+  static const documentPreviewName = 'document-preview';
+  static const documentPreviewPath = '/documents/preview/:documentId';
+  static const documentAlertsName = 'document-alerts';
+  static const documentAlertsPath = '/documents/alerts';
 
   static const aiName = 'ai';
   static const aiPath = '/ai';
@@ -48,6 +54,8 @@ class AppRoutes {
 
   static const filesVaultName = 'files-vault';
   static const filesVaultPath = '/files-vault';
+  static const filesVaultPreviewName = 'files-vault-preview';
+  static const filesVaultPreviewPath = '/files-vault/preview/:fileId';
 
   static const photoGalleryName = 'photo-gallery';
   static const photoGalleryPath = '/photos';

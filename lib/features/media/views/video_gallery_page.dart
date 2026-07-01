@@ -6,6 +6,7 @@ import '../../../routes/app_routes.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
 import '../widgets/media_widgets.dart';
+import 'filtered_media_page.dart';
 import 'media_actions.dart';
 
 class VideoGalleryPage extends ConsumerStatefulWidget {
@@ -20,9 +21,7 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
   void initState() {
     super.initState();
     Future.microtask(
-      () => ref
-          .read(mediaLibraryProvider.notifier)
-          .scanDeviceMedia(MediaKind.video),
+      () => ref.read(mediaLibraryProvider.notifier).scanAllDeviceMedia(),
     );
   }
 
@@ -31,7 +30,7 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
     final state = ref.watch(mediaLibraryProvider);
     final controller = ref.read(mediaLibraryProvider.notifier);
     final items = controller.visibleItems(kind: MediaKind.video);
-    final folders = controller.videoFolders();
+    final folders = controller.mediaFolders();
     final privateUsed = controller.privateVideoUsedMb.toStringAsFixed(0);
 
     return MediaPageShell(
@@ -50,8 +49,7 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
         ),
       ],
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () =>
-            controller.scanDeviceMedia(MediaKind.video, force: true),
+        onPressed: () => controller.scanAllDeviceMedia(force: true),
         icon: const Icon(Icons.video_call_rounded),
         label: const Text('Refresh'),
       ),
@@ -63,7 +61,8 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
           )
         else if (state.isLoading)
           const LoadingSkeletonGrid(),
-        if (state.permissionDenied || state.isLoading) const SizedBox(height: 16),
+        if (state.permissionDenied || state.isLoading)
+          const SizedBox(height: 16),
         MediaSearchAndFilters(
           query: state.query,
           sort: state.sort,
@@ -114,7 +113,7 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
 class _VideoFolderStrip extends StatelessWidget {
   const _VideoFolderStrip({required this.folders});
 
-  final List<String> folders;
+  final List<MediaFolderSummary> folders;
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +122,7 @@ class _VideoFolderStrip extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Device video folders',
+          'Device folders',
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 10),
@@ -134,8 +133,22 @@ class _VideoFolderStrip extends StatelessWidget {
             for (final folder in folders)
               ActionChip(
                 avatar: const Icon(Icons.folder_rounded),
-                label: Text(folder),
-                onPressed: () {},
+                label: Text(
+                  '${folder.name} (${folder.photoCount}P/${folder.videoCount}V)',
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => FilteredMediaPage(
+                        title: folder.name,
+                        subtitle:
+                            '${folder.photoCount} photos, ${folder.videoCount} videos',
+                        icon: Icons.folder_open_rounded,
+                        folderName: folder.name,
+                      ),
+                    ),
+                  );
+                },
               ),
           ],
         ),

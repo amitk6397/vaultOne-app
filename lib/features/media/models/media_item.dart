@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import '../../../constants/app_colors.dart';
 
@@ -23,6 +24,7 @@ class MediaItem {
     required this.sizeMb,
     required this.accent,
     this.assetId,
+    this.assetEntity,
     this.path,
     this.duration,
     this.isFavorite = false,
@@ -42,6 +44,7 @@ class MediaItem {
   final double sizeMb;
   final Color accent;
   final String? assetId;
+  final AssetEntity? assetEntity;
   final String? path;
   final Duration? duration;
   final bool isFavorite;
@@ -78,7 +81,10 @@ class MediaItem {
     bool? isDeleted,
     Duration? lastPosition,
     String? assetId,
+    AssetEntity? assetEntity,
     String? path,
+    double? sizeMb,
+    Duration? duration,
   }) {
     return MediaItem(
       id: id,
@@ -89,17 +95,35 @@ class MediaItem {
       albumName: albumName ?? this.albumName,
       folderName: folderName ?? this.folderName,
       createdAt: createdAt,
-      sizeMb: sizeMb,
+      sizeMb: sizeMb ?? this.sizeMb,
       accent: accent,
       assetId: assetId ?? this.assetId,
+      assetEntity: assetEntity ?? this.assetEntity,
       path: path ?? this.path,
-      duration: duration,
+      duration: duration ?? this.duration,
       isFavorite: isFavorite ?? this.isFavorite,
       isHidden: isHidden ?? this.isHidden,
       isDeleted: isDeleted ?? this.isDeleted,
       lastPosition: lastPosition ?? this.lastPosition,
     );
   }
+}
+
+class MediaFolderSummary {
+  const MediaFolderSummary({required this.name, required this.items});
+
+  final String name;
+  final List<MediaItem> items;
+
+  int get photoCount =>
+      items.where((item) => item.kind == MediaKind.photo).length;
+
+  int get videoCount =>
+      items.where((item) => item.kind == MediaKind.video).length;
+
+  int get totalCount => items.length;
+
+  MediaItem? get cover => items.isEmpty ? null : items.first;
 }
 
 class MediaAlbum {
