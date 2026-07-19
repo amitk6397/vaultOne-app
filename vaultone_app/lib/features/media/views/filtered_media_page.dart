@@ -1,0 +1,94 @@
+import 'package:flutter/material.dart';
+import '../../../core/localization/app_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/media_item.dart';
+import '../providers/media_provider.dart';
+import '../widgets/media_widgets.dart';
+import 'media_actions.dart';
+
+class FilteredMediaPage extends ConsumerWidget {
+  const FilteredMediaPage({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    this.kind,
+    this.visibility,
+    this.albumId,
+    this.folderName,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final MediaKind? kind;
+  final MediaVisibility? visibility;
+  final String? albumId;
+  final String? folderName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(mediaLibraryProvider);
+    final controller = ref.read(mediaLibraryProvider.notifier);
+    final items = controller.visibleItems(
+      kind: kind,
+      visibility: visibility,
+      albumId: albumId,
+      folderName: folderName,
+    );
+
+    return MediaPageShell(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => kind == null
+            ? controller.scanAllDeviceMedia(force: true)
+            : importMedia(context, ref, kind!),
+        tooltip: context.l10n.tr(kind == null ? 'refresh' : 'import'),
+        child: Icon(
+          kind == MediaKind.photo
+              ? Icons.add_photo_alternate_rounded
+              : Icons.video_call_rounded,
+        ),
+      ),
+      children: [
+        MediaSearchAndFilters(
+          query: state.query,
+          sort: state.sort,
+          isGrid: state.viewMode == MediaViewMode.grid,
+          onQueryChanged: controller.setQuery,
+          onSortChanged: controller.setSort,
+          onToggleView: controller.toggleView,
+        ),
+        const SizedBox(height: 16),
+        if (kind == MediaKind.photo && folderName != null)
+          CustomScrollView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            slivers: [
+              GroupedMediaSliverView(
+                items: items,
+                selectedIds: state.selectedIds,
+                onTap: (item) => openMedia(context, item),
+                onLongPress: (item) => controller.toggleSelection(item.id),
+                onFavorite: (item) => controller.toggleFavorite(item.id),
+                onMore: (item) => showMediaActions(context, ref, item),
+              ),
+            ],
+          )
+        else
+          MediaLibraryView(
+            items: items,
+            viewMode: state.viewMode,
+            selectedIds: state.selectedIds,
+            onTap: (item) => openMedia(context, item),
+            onLongPress: (item) => controller.toggleSelection(item.id),
+            onFavorite: (item) => controller.toggleFavorite(item.id),
+            onMore: (item) => showMediaActions(context, ref, item),
+          ),
+      ],
+    );
+  }
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android centers the complete drawable between the physical screen edges.
+         A small bottom inset moves the visible mark toward the safe-area center. -->
+    <item android:bottom="8dp">
+        <bitmap
+            android:gravity="center"
+            android:src="@mipmap/ic_launcher" />
+    </item>
+</layer-list>

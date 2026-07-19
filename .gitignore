@@ -1,0 +1,21 @@
+ 
+# Firebase Admin SDK
+backend/vaultone-app-firebase-adminsdk-fbsvc-98fa0dccd9.json
+
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Flutter
+.dart_tool/
+build/
+
+# React
+node_modules/
+dist/

@@ -1,0 +1,180 @@
+class AppRoutes {
+  const AppRoutes._();
+
+  static const splashName = 'splash';
+  static const splashPath = '/';
+
+  static const languageName = 'language';
+  static const languagePath = '/language';
+
+  static const onboardingName = 'onboarding';
+  static const onboardingPath = '/onboarding';
+
+  static const loginName = 'login';
+  static const loginPath = '/login';
+
+  static const registerName = 'register';
+  static const registerPath = '/register';
+
+  static const forgotPasswordName = 'forgot-password';
+  static const forgotPasswordPath = '/forgot-password';
+
+  static const verifyOtpName = 'verify-otp';
+  static const verifyOtpPath = '/verify-otp';
+
+  static const resetPasswordName = 'reset-password';
+  static const resetPasswordPath = '/reset-password';
+
+  static const homeName = 'home';
+  static const homePath = '/home';
+  static const notificationsName = 'notifications';
+  static const notificationsPath = '/notifications';
+  static const connectHomeName = 'vault-connect';
+  static const connectHomePath = '/vault-connect';
+  static const connectPermissionName = 'vault-connect-permission';
+  static const connectPermissionPath = '/vault-connect/contacts/permission';
+  static const connectContactsName = 'vault-connect-contacts';
+  static const connectContactsPath = '/vault-connect/contacts';
+  static const connectChatName = 'vault-connect-chat';
+  static const connectChatPath = '/vault-connect/chat/:conversationId';
+  static const connectVaultPickerName = 'vault-connect-vault-picker';
+  static const connectVaultPickerPath =
+      '/vault-connect/chat/:conversationId/vault';
+  static const connectPreviewName = 'vault-connect-preview';
+  static const connectPreviewPath =
+      '/vault-connect/chat/:conversationId/preview';
+  static const connectSettingsName = 'vault-connect-settings';
+  static const connectSettingsPath =
+      '/vault-connect/chat/:conversationId/settings';
+  static const connectSharedName = 'vault-connect-shared';
+  static const connectSharedPath = '/vault-connect/chat/:conversationId/shared';
+  static const connectBlockedName = 'vault-connect-blocked';
+  static const connectBlockedPath = '/vault-connect/blocked';
+  static const connectReportName = 'vault-connect-report';
+  static const connectReportPath = '/vault-connect/report';
+  static const subscriptionsName = 'subscriptions';
+  static const subscriptionsPath = '/subscriptions';
+  static const paymentVerificationName = 'payment-verification';
+  static const paymentVerificationPath = '/subscriptions/verify';
+
+  static const assetsName = 'assets';
+  static const assetsPath = '/assets';
+
+  static const documentsName = 'documents';
+  static const documentsPath = '/documents';
+  static const documentCardName = 'document-card';
+  static const documentCardPath = '/documents/card/:cardId';
+  static const documentScanName = 'document-scan';
+  static const documentScanPath = '/documents/scan';
+  static const documentFolderName = 'document-folder';
+  static const documentFolderPath = '/documents/folder/:folderId';
+  static const documentPreviewName = 'document-preview';
+  static const documentPreviewPath = '/documents/preview/:documentId';
+  static const documentAlertsName = 'document-alerts';
+  static const documentAlertsPath = '/documents/alerts';
+
+  static const aiName = 'ai';
+  static const aiPath = '/ai';
+
+  static const passwordsName = 'passwords';
+  static const passwordsPath = '/passwords';
+
+  static const addEditPasswordName = 'add-edit-password';
+  static const addEditPasswordPath = '/passwords/add-edit';
+
+  static const passwordGeneratorName = 'password-generator';
+  static const passwordGeneratorPath = '/passwords/generator';
+
+  static const secureNotesName = 'secure-notes';
+  static const secureNotesPath = '/passwords/secure-notes';
+
+  static const breachCheckName = 'breach-check';
+  static const breachCheckPath = '/passwords/breach-check';
+
+  static const filesVaultName = 'files-vault';
+  static const filesVaultPath = '/files-vault';
+  static const filesVaultFilesName = 'files-vault-files';
+  static const filesVaultFilesPath = '/files-vault/files';
+  static const filesVaultPrivateName = 'files-vault-private';
+  static const filesVaultPrivatePath = '/files-vault/private';
+  static const filesVaultArchiveName = 'files-vault-archive';
+  static const filesVaultArchivePath = '/files-vault/archive';
+  static const filesVaultPreviewName = 'files-vault-preview';
+  static const filesVaultPreviewPath = '/files-vault/preview/:fileId';
+
+  static const photoGalleryName = 'photo-gallery';
+  static const photoGalleryPath = '/photos';
+
+  static const privatePhotosName = 'private-photos';
+  static const privatePhotosPath = '/photos/private';
+
+  static const publicPhotosName = 'public-photos';
+  static const publicPhotosPath = '/photos/public';
+
+  static const albumsName = 'albums';
+  static const albumsPath = '/photos/albums';
+
+  static const albumDetailsName = 'album-details';
+  static const albumDetailsPath = '/photos/albums/:albumId';
+
+  static const photoViewerName = 'photo-viewer';
+  static const photoViewerPath = '/photos/viewer/:photoId';
+
+  static const photoDetailsName = 'photo-details';
+  static const photoDetailsPath = '/photos/details/:photoId';
+
+  static const videoGalleryName = 'video-gallery';
+  static const videoGalleryPath = '/videos';
+
+  static const privateVideosName = 'private-videos';
+  static const privateVideosPath = '/videos/private';
+
+  static const publicVideosName = 'public-videos';
+  static const publicVideosPath = '/videos/public';
+
+  static const videoFoldersName = 'video-folders';
+  static const videoFoldersPath = '/videos/folders';
+
+  static const videoDetailsName = 'video-details';
+  static const videoDetailsPath = '/videos/details/:videoId';
+
+  static const videoPlayerName = 'video-player';
+  static const videoPlayerPath = '/videos/player/:videoId';
+
+  static const deletedMediaName = 'deleted-media';
+  static const deletedMediaPath = '/media/deleted';
+
+  static const mediaSecurityName = 'media-security';
+  static const mediaSecurityPath = '/media/security';
+
+  static const scannerName = 'scanner';
+  static const scannerPath = '/scanner';
+
+  static const profileName = 'profile';
+  static const profilePath = '/profile';
+
+  static const editProfileName = 'edit-profile';
+  static const editProfilePath = '/profile/edit';
+
+  static const privacyPolicyName = 'privacy-policy';
+  static const privacyPolicyPath = '/profile/privacy-policy';
+
+  static const securitySettingsName = 'security-settings';
+  static const securitySettingsPath = '/profile/security';
+
+  static const appSettingsName = 'app-settings';
+  static const appSettingsPath = '/profile/settings';
+  static const moduleSecurityName = 'module-security';
+  static const moduleSecurityPath = '/profile/settings/module-security';
+
+  static const deleteAccountName = 'delete-account';
+  static const deleteAccountPath = '/profile/delete-account';
+  static const deleteDataName = 'delete-data';
+  static const deleteDataPath = '/profile/delete-data';
+
+  static const supportName = 'support';
+  static const supportPath = '/profile/support';
+
+  static const aboutName = 'about';
+  static const aboutPath = '/profile/about';
+}
