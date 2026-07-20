@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum ModuleStorageTarget { local, database }
 
-enum StorageModule { videos, photos, digiLocker, fileVault }
+enum StorageModule { videos, photos, fileVault }
 
 class ModuleStorageState {
   const ModuleStorageState({this.targets = const {}});

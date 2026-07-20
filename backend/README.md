@@ -75,3 +75,15 @@ GET /api/v1/user/policies/{policy_type}
 ```
 
 Add real MySQL credentials in `.env` before connecting to the database.
+
+## Firebase push notifications
+
+Download a Firebase service-account JSON from Firebase Console, keep it in the
+backend folder, and configure its ignored local path in `.env`:
+
+```text
+FIREBASE_CREDENTIALS_PATH=your-project-firebase-adminsdk-xxxxx.json
+```
+
+The backend initializes Firebase Admin at startup. Check `/health`; the
+`firebase` field reports `ready` when push delivery is configured.

@@ -71,6 +71,8 @@ export function SubscriptionsManager({
     [payments],
   )
 
+  // Keep editable form state synchronized when API data is refreshed.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!settings) {
       setPaymentForm(emptyPaymentSettings)
@@ -94,6 +96,7 @@ export function SubscriptionsManager({
       setShowPlanForm(true)
     }
   }, [loading, plans.length])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const clearMessages = () => {
     setError('')

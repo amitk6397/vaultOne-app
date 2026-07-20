@@ -67,7 +67,6 @@ Future<ModuleStorageTarget?> chooseModuleStorage(
 String moduleLabel(StorageModule module) => switch (module) {
   StorageModule.videos => 'Private videos',
   StorageModule.photos => 'Private photos',
-  StorageModule.digiLocker => 'Digi Locker documents',
   StorageModule.fileVault => 'File Vault files',
 };
 

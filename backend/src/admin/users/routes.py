@@ -38,3 +38,12 @@ async def unblock_user(
     _: Admin = Depends(get_current_admin),
 ) -> DataResponse:
     return await controller.unblock_user(user_id)
+
+
+@router.delete("/{user_id}", response_model=DataResponse)
+async def delete_user(
+    user_id: int,
+    controller: AdminUserController = Depends(get_controller),
+    _: Admin = Depends(get_current_admin),
+) -> DataResponse:
+    return await controller.delete_user(user_id)

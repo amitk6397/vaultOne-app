@@ -977,6 +977,42 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
     } catch (_) {}
   }
 
+  Future<int> syncLocalPhotosToDatabase() async {
+    var syncedCount = 0;
+    final photos = List<MediaItem>.of(state.items).where(
+      (item) =>
+          item.kind == MediaKind.photo &&
+          item.path != null &&
+          item.path!.isNotEmpty,
+    );
+    for (final photo in photos) {
+      await _repository.syncMedia(photo);
+      syncedCount++;
+    }
+    return syncedCount;
+  }
+
+  Future<void> clearVaultOneLocalData() async {
+    final supportDirectory = await getApplicationSupportDirectory();
+    for (final item in List<MediaItem>.of(state.items)) {
+      final path = item.path;
+      if (path == null || path.isEmpty || item.assetId != null) continue;
+      if (!p.isWithin(supportDirectory.path, path)) continue;
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    }
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_privateVideosKey);
+    await preferences.remove(_videoStorageKey);
+    state = state.copyWith(
+      items: const [],
+      albums: const [],
+      selectedIds: const {},
+      scannedKinds: const {},
+      videoStorage: VideoStorage.local,
+    );
+  }
+
   Future<void> _updateRemote(MediaItem item) async {
     try {
       await _repository.updateMedia(item);

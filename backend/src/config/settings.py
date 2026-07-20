@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import quote
 
 from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: int = 30
 
     # Firebase service-account JSON. Relative paths are resolved from backend/.
-    firebase_credentials_path: str = "vaultone-app-firebase-adminsdk-fbsvc-98fa0dccd9.json"
+    firebase_credentials_path: str = "firebase-service-account.json"
 
     cloudinary_url: str | None = Field(default=None, alias="CLOUDINARY_URL")
     cloudinary_cloud_name: str | None = Field(
@@ -95,9 +96,12 @@ class Settings(BaseSettings):
             return self.database_url_value
         if not self.db_user or not self.db_password or not self.db_name:
             raise ValueError("DATABASE_URL or DB_USER, DB_PASSWORD, and DB_NAME must be set")
+        encoded_user = quote(self.db_user, safe="")
+        encoded_password = quote(self.db_password, safe="")
+        encoded_database = quote(self.db_name, safe="")
         return (
-            f"mysql+aiomysql://{self.db_user}:{self.db_password}"
-            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+            f"mysql+aiomysql://{encoded_user}:{encoded_password}"
+            f"@{self.db_host}:{self.db_port}/{encoded_database}"
         )
 
     @computed_field
@@ -117,6 +121,10 @@ class Settings(BaseSettings):
         if self.app_env.lower() in {"development", "dev", "local"}:
             return r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$"
         return None
+
+    @property
+    def is_development(self) -> bool:
+        return self.app_env.strip().lower() in {"development", "dev", "local"}
 
     model_config = SettingsConfigDict(
         env_file=".env",

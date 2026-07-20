@@ -12,7 +12,6 @@ enum VaultSecuritySection {
   files,
   passwords,
   secureNotes,
-  digiLocker,
   photos,
   videos,
   scanner,
@@ -75,7 +74,6 @@ class _LocalAuthGateState extends ConsumerState<LocalAuthGate> {
           VaultSecuritySection.passwords => profile.passwordSecurityEnabled,
           VaultSecuritySection.secureNotes =>
             profile.secureNotesSecurityEnabled,
-          VaultSecuritySection.digiLocker => profile.digiLockerSecurityEnabled,
           VaultSecuritySection.files => profile.filesSecurityEnabled,
           VaultSecuritySection.photos => profile.photosSecurityEnabled,
           VaultSecuritySection.videos => profile.videosSecurityEnabled,

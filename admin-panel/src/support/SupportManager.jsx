@@ -18,7 +18,11 @@ export function SupportManager() {
     try { const [content, list] = await Promise.all([adminApi.supportContent(pageKey), adminApi.supportThreads()]); setPage(content.data || emptyPage); setThreads(list.data || []) }
     catch (err) { setError(err.message) }
   }
-  useEffect(() => { load() }, [pageKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // Loading remote content in response to the selected page is intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load()
+  }, [pageKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const openThread = async (thread) => { setSelected(thread); const response = await adminApi.supportMessages(thread.id); setMessages(response.data || []); await load() }
   const save = async () => { setError(''); try { await adminApi.saveSupportContent(pageKey, page); setSuccess(`${pageKey === 'help' ? 'Help' : 'About'} content saved.`) } catch (err) { setError(err.message) } }
   const sendReply = async () => { if (!reply.trim() || !selected) return; await adminApi.replySupport(selected.id, reply.trim()); setReply(''); await openThread(selected) }

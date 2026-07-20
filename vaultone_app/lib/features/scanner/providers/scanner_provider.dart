@@ -115,6 +115,12 @@ class ScannerController extends StateNotifier<ScannerState> {
     state = state.copyWith(results: _readResults());
   }
 
+  Future<void> clearLocalCache() async {
+    await _box?.clear();
+    lastAiResult = null;
+    state = state.copyWith(results: const []);
+  }
+
   OcrScanResult? resultById(String id) {
     for (final result in state.results) {
       if (result.id == id) return result;

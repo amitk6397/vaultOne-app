@@ -197,6 +197,7 @@ export const adminApi = {
     request(`/admin/users/${id}/unblock`, {
       method: 'PATCH',
     }),
+  deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
   listPlans: () => request('/admin/subscriptions/plans'),
   createPlan: (payload) => request('/admin/subscriptions/plans', { method: 'POST', body: JSON.stringify(payload) }),
   updatePlan: (id, payload) => request(`/admin/subscriptions/plans/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),

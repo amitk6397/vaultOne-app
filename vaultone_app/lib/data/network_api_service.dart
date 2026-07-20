@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +11,9 @@ import '../constants/app_url.dart';
 import '../core/localization/app_language_controller.dart';
 import '../core/security/secure_token_store.dart';
 
-Future<String?>? _refreshTokenFuture;
+typedef _SessionTokens = ({String accessToken, String refreshToken});
+
+Future<_SessionTokens?>? _refreshTokenFuture;
 
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
@@ -27,15 +31,40 @@ final dioProvider = Provider<Dio>((ref) {
         final prefs = await SharedPreferences.getInstance();
         options.headers['Accept-Language'] =
             prefs.getString(appLanguagePreferenceKey) ?? 'en';
-        final token = await SecureTokenStore.instance.accessToken();
-        if (token != null && token.isNotEmpty) {
-          options.headers['Authorization'] = 'Bearer $token';
+        if (_isVaultOneApi(options.uri)) {
+          var token = await SecureTokenStore.instance.accessToken();
+          if (_tokenNeedsRefresh(token) &&
+              !options.path.endsWith('/auth/refresh')) {
+            final storedRefresh = await SecureTokenStore.instance
+                .refreshToken();
+            if (storedRefresh != null && storedRefresh.isNotEmpty) {
+              final refresh = _refreshTokenFuture ??= _refreshSession(
+                storedRefresh,
+              );
+              try {
+                final session = await refresh;
+                token = session?.accessToken;
+              } finally {
+                if (identical(_refreshTokenFuture, refresh)) {
+                  _refreshTokenFuture = null;
+                }
+              }
+            }
+          } else {
+            final activeRefresh = _refreshTokenFuture;
+            final refreshed = activeRefresh == null
+                ? null
+                : await activeRefresh;
+            token = refreshed?.accessToken ?? token;
+          }
+          if (token != null && token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+        } else {
+          options.headers.remove('Authorization');
         }
         if (kDebugMode) {
           debugPrint('API -> ${options.method} ${options.uri}');
-          if (options.data != null) {
-            debugPrint('API request: ${options.data}');
-          }
         }
         handler.next(options);
       },
@@ -57,21 +86,24 @@ final dioProvider = Provider<Dio>((ref) {
         }
         final request = error.requestOptions;
         if (error.response?.statusCode == 401 &&
+            _isVaultOneApi(request.uri) &&
+            request.extra['skip_auth_refresh'] != true &&
             request.extra['retried_after_refresh'] != true &&
             !request.path.endsWith('/auth/refresh')) {
           final refreshToken = await SecureTokenStore.instance.refreshToken();
           if (refreshToken != null && refreshToken.isNotEmpty) {
             try {
-              _refreshTokenFuture ??= _refreshSession(refreshToken);
-              final accessToken = await _refreshTokenFuture;
-              _refreshTokenFuture = null;
+              final refresh = _refreshTokenFuture ??= _refreshSession(
+                refreshToken,
+              );
+              final session = await refresh;
+              if (identical(_refreshTokenFuture, refresh)) {
+                _refreshTokenFuture = null;
+              }
 
-              if (accessToken != null && accessToken.isNotEmpty) {
-                await SecureTokenStore.instance.write(
-                  accessToken: accessToken,
-                  refreshToken: refreshToken,
-                );
-                request.headers['Authorization'] = 'Bearer $accessToken';
+              if (session != null) {
+                request.headers['Authorization'] =
+                    'Bearer ${session.accessToken}';
                 request.extra['retried_after_refresh'] = true;
                 return handler.resolve(await dio.fetch(request));
               }
@@ -92,7 +124,7 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
-Future<String?> _refreshSession(String refreshToken) async {
+Future<_SessionTokens?> _refreshSession(String refreshToken) async {
   final refreshDio = Dio(
     BaseOptions(
       baseUrl: AppUrl.baseUrl,
@@ -121,11 +153,44 @@ Future<String?> _refreshSession(String refreshToken) async {
     tokenType: tokenType ?? 'bearer',
   );
 
-  return accessToken;
+  return (
+    accessToken: accessToken,
+    refreshToken: rotatedRefreshToken ?? refreshToken,
+  );
 }
 
 Future<void> _clearSessionTokens() async {
   await SecureTokenStore.instance.clear();
+}
+
+bool _isVaultOneApi(Uri uri) {
+  final api = Uri.parse(AppUrl.baseUrl);
+  return uri.scheme == api.scheme &&
+      uri.host == api.host &&
+      _port(uri) == _port(api);
+}
+
+int _port(Uri uri) => uri.hasPort
+    ? uri.port
+    : uri.scheme == 'https'
+    ? 443
+    : 80;
+
+bool _tokenNeedsRefresh(String? token) {
+  if (token == null || token.isEmpty) return false;
+  try {
+    final parts = token.split('.');
+    if (parts.length != 3) return true;
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+    );
+    final expiresAt = payload is Map ? payload['exp'] as num? : null;
+    if (expiresAt == null) return true;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return expiresAt.toInt() <= now + 30;
+  } catch (_) {
+    return true;
+  }
 }
 
 final apiServiceProvider = Provider<BaseApiService>((ref) {

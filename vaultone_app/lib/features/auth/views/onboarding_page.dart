@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../constants/auth_constants.dart';
 import '../../../constants/app_text_styles.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../routes/app_routes.dart';
@@ -50,6 +52,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         slides: _fallbackSlides(context),
         currentIndex: 0,
         onPageChanged: _setIndex,
+        onComplete: _completeOnboarding,
       ),
       data: (slides) {
         final visibleSlides = slides.isEmpty
@@ -61,6 +64,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           slides: visibleSlides,
           currentIndex: safeIndex,
           onPageChanged: _setIndex,
+          onComplete: _completeOnboarding,
         );
       },
     );
@@ -68,6 +72,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   void _setIndex(int index) {
     ref.read(onboardingIndexProvider.notifier).state = index;
+  }
+
+  Future<void> _completeOnboarding() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(AuthConstants.onboardingCompletedKey, true);
+    if (mounted) context.goNamed(AppRoutes.loginName);
   }
 }
 
@@ -86,12 +96,14 @@ class _OnboardingScaffold extends StatelessWidget {
     required this.slides,
     required this.currentIndex,
     required this.onPageChanged,
+    required this.onComplete,
   });
 
   final PageController controller;
   final List<OnboardingSlide> slides;
   final int currentIndex;
   final ValueChanged<int> onPageChanged;
+  final Future<void> Function() onComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -111,9 +123,7 @@ class _OnboardingScaffold extends StatelessWidget {
               alignment: Alignment.topRight,
               child: Padding(
                 padding: const EdgeInsets.only(top: 8, right: 18),
-                child: _SkipButton(
-                  onTap: () => context.goNamed(AppRoutes.loginName),
-                ),
+                child: _SkipButton(onTap: onComplete),
               ),
             ),
           ),
@@ -133,7 +143,7 @@ class _OnboardingScaffold extends StatelessWidget {
                           : context.l10n.tr('next'),
                       onPressed: () {
                         if (currentIndex == slides.length - 1) {
-                          context.goNamed(AppRoutes.loginName);
+                          onComplete();
                           return;
                         }
                         controller.nextPage(

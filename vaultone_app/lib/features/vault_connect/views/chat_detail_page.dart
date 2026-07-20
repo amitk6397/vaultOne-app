@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -77,7 +78,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(vaultConnectProvider);
     final messages = state.messages[widget.conversation.id] ?? const [];
-    final blocked = widget.conversation.isBlocked;
+    final currentConversation = state.conversations
+        .where((item) => item.id == widget.conversation.id)
+        .firstOrNull;
+    final conversation = currentConversation ?? widget.conversation;
+    final blocked = conversation.isBlocked;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -100,21 +105,27 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           ),
         ),
         actions: [
-          if (widget.conversation.disappearingSeconds > 0)
+          if (conversation.disappearingSeconds > 0)
             const Icon(Icons.timer_outlined, size: 19),
           IconButton(
-            onPressed: () => context.pushNamed(
-              AppRoutes.connectSettingsName,
-              pathParameters: {'conversationId': widget.conversation.id},
-              extra: widget.conversation,
-            ),
+            onPressed: () async {
+              final refreshed = await ref
+                  .read(vaultConnectProvider.notifier)
+                  .refreshConversation(widget.conversation.id);
+              if (!context.mounted) return;
+              context.pushNamed(
+                AppRoutes.connectSettingsName,
+                pathParameters: {'conversationId': widget.conversation.id},
+                extra: refreshed ?? widget.conversation,
+              );
+            },
             icon: const Icon(Icons.more_vert),
           ),
         ],
       ),
       body: Column(
         children: [
-          if (widget.conversation.disappearingSeconds > 0)
+          if (conversation.disappearingSeconds > 0)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(7),
@@ -338,6 +349,29 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   Future<void> _attachmentActions(ConnectAttachment item) async {
+    if (item.localPath != null) {
+      if (item.fileType == 'image') {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => Dialog(
+            child: InteractiveViewer(
+              child: Image.file(File(item.localPath!), fit: BoxFit.contain),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              item.uploadStatus == 'uploading'
+                  ? 'Upload in progress…'
+                  : 'Upload failed. Tap the error icon to retry.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (_) => SafeArea(
@@ -366,7 +400,38 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     if (action == null || !mounted) return;
     try {
       if (action == 'open') {
-        await ref.read(vaultConnectProvider.notifier).openSecurely(item);
+        if (item.fileType == 'image') {
+          final path = await ref
+              .read(vaultConnectProvider.notifier)
+              .download(item);
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) => Dialog.fullscreen(
+              child: Scaffold(
+                backgroundColor: Colors.black,
+                appBar: AppBar(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  title: Text(item.fileName),
+                  leading: IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(dialogContext),
+                  ),
+                ),
+                body: Center(
+                  child: InteractiveViewer(
+                    minScale: .5,
+                    maxScale: 5,
+                    child: Image.file(File(path), fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+            ),
+          );
+        } else {
+          await ref.read(vaultConnectProvider.notifier).openSecurely(item);
+        }
       }
       if (action == 'export') {
         await ref.read(vaultConnectProvider.notifier).exportToDevice(item);
@@ -561,7 +626,10 @@ class _MessageBubble extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            attachment.fileType == 'image'
+                            attachment.fileType == 'image' &&
+                                    attachment.localPath != null
+                                ? Icons.check_circle_outline
+                                : attachment.fileType == 'image'
                                 ? Icons.image
                                 : attachment.fileType == 'video'
                                 ? Icons.movie
@@ -569,6 +637,21 @@ class _MessageBubble extends StatelessWidget {
                             color: mine ? Colors.white : AppColors.purple,
                           ),
                           const SizedBox(width: 8),
+                          if (attachment.fileType == 'image' &&
+                              attachment.localPath != null) ...[
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(attachment.localPath!),
+                                width: 54,
+                                height: 54,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
                           Flexible(
                             child: Text(
                               attachment.fileName,

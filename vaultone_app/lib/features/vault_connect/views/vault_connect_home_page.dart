@@ -46,6 +46,7 @@ class _VaultConnectHomePageState extends ConsumerState<VaultConnectHomePage> {
         onPressed: () => context.pushNamed(AppRoutes.connectPermissionName),
         icon: const Icon(Icons.lock_person_rounded),
         label: const Text('New chat'),
+        shape: const StadiumBorder(),
       ),
       body: RefreshIndicator(
         onRefresh: () =>

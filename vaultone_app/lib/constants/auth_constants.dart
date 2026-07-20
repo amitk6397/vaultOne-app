@@ -7,6 +7,7 @@ class AuthConstants {
   static const splashAnimationDuration = Duration(milliseconds: 650);
   static const otpTick = Duration(seconds: 1);
   static const requestTimeout = Duration(seconds: 15);
+  static const onboardingCompletedKey = 'onboarding_completed';
 
   static const screenPadding = EdgeInsets.fromLTRB(12, 10, 12, 20);
   static const cardPadding = EdgeInsets.all(16);

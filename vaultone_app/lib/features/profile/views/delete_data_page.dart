@@ -8,7 +8,6 @@ import '../../../shared/widgets/app_loading_indicator.dart';
 import '../../../routes/app_routes.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_page_header.dart';
-import '../../documents/providers/digi_locker_provider.dart';
 import '../../files_vault/providers/files_vault_provider.dart';
 import '../../media/models/media_item.dart';
 import '../../media/providers/media_provider.dart';
@@ -28,21 +27,12 @@ class _DeleteDataPageState extends ConsumerState<DeleteDataPage> {
   @override
   Widget build(BuildContext context) {
     final files = ref.watch(filesVaultProvider.select((state) => state.files));
-    final documents = ref.watch(
-      digiLockerProvider.select((state) => state.documents),
-    );
     final passwords = ref.watch(passwordVaultProvider);
     final media = ref.watch(
       mediaLibraryProvider.select((state) => state.items),
     );
     final sections = [
       _DataSection('files', 'Files', Icons.folder_delete_rounded, files.length),
-      _DataSection(
-        'documents',
-        'Documents',
-        Icons.file_copy_rounded,
-        documents.length,
-      ),
       _DataSection(
         'passwords',
         'Passwords & notes',
@@ -189,15 +179,6 @@ class _DeleteDataPageState extends ConsumerState<DeleteDataPage> {
           .toList();
       for (final id in ids) {
         await ref.read(filesVaultProvider.notifier).deleteFile(id);
-      }
-    } else if (section == 'documents') {
-      final ids = ref
-          .read(digiLockerProvider)
-          .documents
-          .map((item) => item.id)
-          .toList();
-      for (final id in ids) {
-        await ref.read(digiLockerProvider.notifier).deleteDocument(id);
       }
     } else if (section == 'passwords') {
       final state = ref.read(passwordVaultProvider);

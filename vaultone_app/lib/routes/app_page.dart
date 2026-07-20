@@ -12,12 +12,6 @@ import '../features/auth/views/register_page.dart';
 import '../features/auth/views/reset_password_page.dart';
 import '../features/auth/views/splash_screen.dart';
 import '../features/auth/views/verify_otp_page.dart';
-import '../features/documents/views/documents_page.dart';
-import '../features/documents/views/document_alerts_page.dart';
-import '../features/documents/views/document_folder_page.dart';
-import '../features/documents/views/document_preview_page.dart';
-import '../features/documents/views/digi_document_card_page.dart';
-import '../features/documents/views/digi_document_scan_page.dart';
 import '../features/files_vault/views/files_vault_page.dart';
 import '../features/files_vault/views/vault_file_detail_page.dart';
 import '../features/files_vault/views/vault_files_list_page.dart';
@@ -234,69 +228,6 @@ final appRouter = GoRouter(
             ? ReportUserPage(conversation: state.extra! as ConnectConversation)
             : const VaultConnectHomePage(),
       ),
-    ),
-    GoRoute(
-      name: AppRoutes.documentsName,
-      path: AppRoutes.documentsPath,
-      pageBuilder: (context, state) => _fadePage(
-        state: state,
-        child: LocalAuthGate(
-          section: VaultSecuritySection.digiLocker,
-          title: context.l10n.tr('digi_locker'),
-          reason: context.l10n.tr('unlock_digi_locker_documents'),
-          child: const DocumentsPage(),
-        ),
-      ),
-    ),
-
-    GoRoute(
-      name: AppRoutes.documentCardName,
-      path: AppRoutes.documentCardPath,
-      pageBuilder: (context, state) => _fadePage(
-        state: state,
-        child: DigiDocumentCardPage(
-          cardId: state.pathParameters['cardId'] ?? '',
-        ),
-      ),
-    ),
-    GoRoute(
-      name: AppRoutes.documentScanName,
-      path: AppRoutes.documentScanPath,
-      pageBuilder: (context, state) {
-        final args = state.extra;
-        return _fadePage(
-          state: state,
-          child: args is DigiDocumentScanArgs
-              ? DigiDocumentScanPage(args: args)
-              : const DocumentsPage(),
-        );
-      },
-    ),
-    GoRoute(
-      name: AppRoutes.documentFolderName,
-      path: AppRoutes.documentFolderPath,
-      pageBuilder: (context, state) => _fadePage(
-        state: state,
-        child: DocumentFolderPage(
-          folderId: state.pathParameters['folderId'] ?? '',
-        ),
-      ),
-    ),
-    GoRoute(
-      name: AppRoutes.documentPreviewName,
-      path: AppRoutes.documentPreviewPath,
-      pageBuilder: (context, state) => _fadePage(
-        state: state,
-        child: DocumentPreviewPage(
-          documentId: state.pathParameters['documentId'] ?? '',
-        ),
-      ),
-    ),
-    GoRoute(
-      name: AppRoutes.documentAlertsName,
-      path: AppRoutes.documentAlertsPath,
-      pageBuilder: (context, state) =>
-          _fadePage(state: state, child: const DocumentAlertsPage()),
     ),
     GoRoute(
       name: AppRoutes.aiName,

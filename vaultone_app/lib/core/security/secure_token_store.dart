@@ -25,6 +25,13 @@ class SecureTokenStore {
     return _storage.read(key: _refresh);
   }
 
+  Future<bool> isLoggedIn() async {
+    final access = await accessToken();
+    if (access != null && access.isNotEmpty) return true;
+    final refresh = await refreshToken();
+    return refresh != null && refresh.isNotEmpty;
+  }
+
   Future<void> write({
     required String accessToken,
     String? refreshToken,

@@ -69,6 +69,13 @@ async def is_blocked(db: AsyncSession, first: int, second: int) -> bool:
     ))))
 
 
+async def blocked_by(db: AsyncSession, blocker: int, blocked: int) -> bool:
+    return bool(await db.scalar(select(UserBlock.id).where(
+        UserBlock.blocker_user_id == blocker,
+        UserBlock.blocked_user_id == blocked,
+    )))
+
+
 async def require_member(db: AsyncSession, conversation_id: str, user_id: int) -> ConversationMember:
     member = await db.scalar(select(ConversationMember).where(
         ConversationMember.conversation_id == conversation_id,
@@ -156,6 +163,7 @@ async def conversation_data(db: AsyncSession, conversation: Conversation, viewer
         "is_archived": member.is_archived, "is_muted": member.is_muted,
         "cleared_before": member.cleared_before, "created_at": conversation.created_at,
         "is_blocked": await is_blocked(db, viewer_id, other_id),
+        "blocked_by_me": await blocked_by(db, viewer_id, other_id),
     }
 
 

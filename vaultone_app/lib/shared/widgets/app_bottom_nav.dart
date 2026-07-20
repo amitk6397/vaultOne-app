@@ -6,7 +6,7 @@ import '../../constants/app_text_styles.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../routes/app_routes.dart';
 
-enum AppNavTab { home, documents, ai, passwords, profile }
+enum AppNavTab { home, files, ai, passwords, profile }
 
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key, required this.activeTab});
@@ -42,9 +42,9 @@ class AppBottomNav extends StatelessWidget {
                     Expanded(
                       child: _NavItem(
                         icon: Icons.folder_rounded,
-                        label: context.l10n.tr('docs'),
-                        active: activeTab == AppNavTab.documents,
-                        onTap: () => context.pushNamed(AppRoutes.documentsName),
+                        label: context.l10n.tr('files'),
+                        active: activeTab == AppNavTab.files,
+                        onTap: () => context.pushNamed(AppRoutes.filesVaultName),
                       ),
                     ),
                     const SizedBox(width: 68),

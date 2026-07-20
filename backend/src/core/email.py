@@ -29,10 +29,26 @@ def send_otp_email(*, to_email: str, otp: str, purpose: str) -> None:
     )
 
     if settings.brevo_api_key and settings.brevo_from_email:
-        _send_with_brevo(to_email=to_email, subject=subject, body=body)
+        try:
+            _send_with_brevo(to_email=to_email, subject=subject, body=body)
+        except HTTPException:
+            if not settings.is_development:
+                raise
+            logger.warning(
+                "Brevo OTP delivery failed in debug mode; using response OTP "
+                "recipient=%s",
+                _masked_email(to_email),
+            )
         return
 
     if not settings.smtp_host or not settings.smtp_username or not settings.smtp_password:
+        if settings.is_development:
+            logger.warning(
+                "Email OTP service is not configured in debug mode; using response OTP "
+                "recipient=%s",
+                _masked_email(to_email),
+            )
+            return
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Email OTP service is not configured",

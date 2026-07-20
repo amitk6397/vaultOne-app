@@ -1,7 +1,7 @@
 class AppUrl {
   const AppUrl._();
 
-  static const baseUrl = "http://192.168.31.161:8000/api/v1/";
+  static const baseUrl = "http://192.168.1.26:8000/api/v1/";
 
   static const userLogin = '${baseUrl}user/auth/login';
   static const userLogout = '${baseUrl}user/auth/logout';

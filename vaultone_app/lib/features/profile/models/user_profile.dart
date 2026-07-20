@@ -11,7 +11,6 @@ class UserProfile {
     required this.pushAlertsEnabled,
     this.passwordSecurityEnabled = true,
     this.secureNotesSecurityEnabled = true,
-    this.digiLockerSecurityEnabled = true,
     this.filesSecurityEnabled = false,
     this.photosSecurityEnabled = true,
     this.videosSecurityEnabled = true,
@@ -29,7 +28,6 @@ class UserProfile {
   final bool pushAlertsEnabled;
   final bool passwordSecurityEnabled;
   final bool secureNotesSecurityEnabled;
-  final bool digiLockerSecurityEnabled;
   final bool filesSecurityEnabled;
   final bool photosSecurityEnabled;
   final bool videosSecurityEnabled;
@@ -65,7 +63,6 @@ class UserProfile {
     bool? pushAlertsEnabled,
     bool? passwordSecurityEnabled,
     bool? secureNotesSecurityEnabled,
-    bool? digiLockerSecurityEnabled,
     bool? filesSecurityEnabled,
     bool? photosSecurityEnabled,
     bool? videosSecurityEnabled,
@@ -85,8 +82,6 @@ class UserProfile {
           passwordSecurityEnabled ?? this.passwordSecurityEnabled,
       secureNotesSecurityEnabled:
           secureNotesSecurityEnabled ?? this.secureNotesSecurityEnabled,
-      digiLockerSecurityEnabled:
-          digiLockerSecurityEnabled ?? this.digiLockerSecurityEnabled,
       filesSecurityEnabled: filesSecurityEnabled ?? this.filesSecurityEnabled,
       photosSecurityEnabled:
           photosSecurityEnabled ?? this.photosSecurityEnabled,

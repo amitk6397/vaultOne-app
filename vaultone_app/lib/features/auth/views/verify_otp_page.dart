@@ -13,6 +13,7 @@ import '../../../routes/app_routes.dart';
 import '../../../shared/widgets/light_auth_widgets.dart';
 import '../providers/auth_provider.dart';
 import '../providers/auth_ui_provider.dart';
+import '../session_refresh.dart';
 
 class VerifyOtpPage extends ConsumerStatefulWidget {
   const VerifyOtpPage({super.key});
@@ -242,6 +243,9 @@ class _VerifyOtpPageState extends ConsumerState<VerifyOtpPage> {
         .verifyOtp(identity: identity, otp: code, purpose: purpose);
     if (!mounted) return;
     if (success) {
+      if (purpose != 'forgot_password') {
+        refreshAuthenticatedData(ref);
+      }
       ref.read(otpCodeProvider.notifier).state = '';
       ScaffoldMessenger.of(
         context,

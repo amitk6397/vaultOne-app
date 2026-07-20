@@ -3,9 +3,9 @@ import { Loader2, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { adminApi } from '../services/api'
 
 const bytes = (value = 0) => {
-  if (value < 1024 * 1024) return '${(value / 1024).toFixed(1)} KB'
-  if (value < 1024 * 1024 * 1024) return '${(value / 1024 / 1024).toFixed(1)} MB'
-  return '${(value / 1024 / 1024 / 1024).toFixed(2)} GB'
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
 export function VaultConnectManager({ users = [] }) {
@@ -35,7 +35,11 @@ export function VaultConnectManager({ users = [] }) {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    // Initial API hydration is intentionally triggered on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    load()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveConfig = async () => {
     setBusy(true)

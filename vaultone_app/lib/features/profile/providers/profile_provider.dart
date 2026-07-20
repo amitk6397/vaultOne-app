@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../constants/auth_constants.dart';
 import '../../../core/security/secure_token_store.dart';
+import '../../../core/localization/app_language_controller.dart';
 import '../../notifications/repositories/notification_repository.dart';
 
 import '../models/user_profile.dart';
@@ -43,7 +46,6 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     state = state.copyWith(
       passwordSecurityEnabled: prefs.getBool('security_passwords') ?? true,
       secureNotesSecurityEnabled: prefs.getBool('security_notes') ?? true,
-      digiLockerSecurityEnabled: prefs.getBool('security_documents') ?? true,
       filesSecurityEnabled: prefs.getBool('security_files') ?? false,
       photosSecurityEnabled: prefs.getBool('security_photos') ?? true,
       videosSecurityEnabled: prefs.getBool('security_videos') ?? true,
@@ -67,7 +69,6 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
       state = remote.copyWith(
         passwordSecurityEnabled: state.passwordSecurityEnabled,
         secureNotesSecurityEnabled: state.secureNotesSecurityEnabled,
-        digiLockerSecurityEnabled: state.digiLockerSecurityEnabled,
         filesSecurityEnabled: state.filesSecurityEnabled,
         photosSecurityEnabled: state.photosSecurityEnabled,
         videosSecurityEnabled: state.videosSecurityEnabled,
@@ -97,7 +98,16 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     await prefs.remove('user_phone');
     await prefs.remove('user_city');
     if (deleteSavedData) {
+      final languageCode = prefs.getString(appLanguagePreferenceKey);
+      final onboardingCompleted =
+          prefs.getBool(AuthConstants.onboardingCompletedKey) ?? false;
       await prefs.clear();
+      if (languageCode != null && languageCode.isNotEmpty) {
+        await prefs.setString(appLanguagePreferenceKey, languageCode);
+      }
+      if (onboardingCompleted) {
+        await prefs.setBool(AuthConstants.onboardingCompletedKey, true);
+      }
     }
   }
 
@@ -153,14 +163,6 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
   Future<void> setSecureNotesSecurity(bool value) async {
     state = state.copyWith(secureNotesSecurityEnabled: value);
     (await SharedPreferences.getInstance()).setBool('security_notes', value);
-  }
-
-  Future<void> setDigiLockerSecurity(bool value) async {
-    state = state.copyWith(digiLockerSecurityEnabled: value);
-    (await SharedPreferences.getInstance()).setBool(
-      'security_documents',
-      value,
-    );
   }
 
   Future<void> setFilesSecurity(bool value) async {

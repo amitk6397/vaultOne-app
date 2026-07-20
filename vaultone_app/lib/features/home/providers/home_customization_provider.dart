@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-enum HomeModuleId { connect, files, passwords, documents, photos, videos, scanner }
+enum HomeModuleId { connect, files, passwords, photos, videos, scanner }
 
 enum HomeModuleColumns { auto, two, three }
 
@@ -64,7 +64,6 @@ const _defaultOrder = [
   HomeModuleId.connect,
   HomeModuleId.files,
   HomeModuleId.passwords,
-  HomeModuleId.documents,
   HomeModuleId.photos,
   HomeModuleId.videos,
   HomeModuleId.scanner,

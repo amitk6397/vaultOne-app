@@ -60,7 +60,7 @@ class UserAuthService:
         await self.db.refresh(user)
         return RegisterResponse(
             user=UserResponse.model_validate(user),
-            otp=otp if settings.debug else None,
+            otp=otp if settings.is_development else None,
         )
 
     async def login(self, payload: LoginRequest) -> UserAuthResponse:
@@ -74,6 +74,11 @@ class UserAuthService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account is inactive",
+            )
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Verify your email OTP before logging in",
             )
         self.db.add(UserAuthEvent(
             user_id=user.id,
@@ -95,11 +100,16 @@ class UserAuthService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account is inactive",
             )
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Verify your registration OTP before logging in",
+            )
         otp = await self._create_otp(user.id, user.email, OtpPurpose.login, user.email)
         await self.db.commit()
         return MessageResponse(
             message="OTP sent successfully",
-            otp=otp if settings.debug else None,
+            otp=otp if settings.is_development else None,
         )
 
     async def forgot_password(self, payload: ForgotPasswordRequest) -> MessageResponse:
@@ -114,7 +124,7 @@ class UserAuthService:
             await self.db.commit()
             return MessageResponse(
                 message="If the account exists, reset instructions were sent",
-                otp=otp if settings.debug else None,
+                otp=otp if settings.is_development else None,
             )
         return MessageResponse(message="If the account exists, reset instructions were sent")
 
@@ -142,6 +152,11 @@ class UserAuthService:
             if user:
                 user.is_verified = True
         if payload.purpose == OtpPurpose.login and user:
+            if not user.is_verified:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Verify your registration OTP before logging in",
+                )
             self.db.add(UserAuthEvent(
                 user_id=user.id,
                 event_type=UserAuthEventType.login,
@@ -190,7 +205,7 @@ class UserAuthService:
         await self.db.commit()
         return MessageResponse(
             message="OTP sent successfully",
-            otp=otp if settings.debug else None,
+            otp=otp if settings.is_development else None,
         )
 
     async def list_onboarding_slides(self) -> list[OnboardingSlideResponse]:

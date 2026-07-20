@@ -9,7 +9,6 @@ import '../../../core/localization/app_language_controller.dart';
 import '../../../shared/widgets/app_feedback.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/app_page_header.dart';
-import '../../documents/providers/digi_locker_provider.dart';
 import '../../files_vault/providers/files_vault_provider.dart';
 import '../../passwords/providers/password_vault_provider.dart';
 import '../providers/ai_provider.dart';
@@ -199,7 +198,6 @@ class _AiPageState extends ConsumerState<AiPage> {
   Map<String, dynamic> _buildAppContext() {
     final passwords = ref.read(passwordVaultProvider);
     final files = ref.read(filesVaultProvider);
-    final docs = ref.read(digiLockerProvider);
     final activePasswords = passwords.entries
         .where((entry) => !entry.isArchived)
         .toList();
@@ -230,22 +228,6 @@ class _AiPageState extends ConsumerState<AiPage> {
             'title': note.title,
             'updated_at': note.updatedAt.toIso8601String(),
             'body_included': false,
-          };
-        }).toList(),
-      },
-      'documents': {
-        'total': docs.documents.length,
-        'expiring_count': docs.expiringCount,
-        'verified_count': docs.verifiedCount,
-        'items': docs.documents.take(25).map((doc) {
-          return {
-            'title': doc.title,
-            'file_name': doc.fileName,
-            'type': doc.typeLabel,
-            'issuer': doc.issuer,
-            'expiry': doc.expiryLabel,
-            'verified': doc.isVerified,
-            'favorite': doc.isFavorite,
           };
         }).toList(),
       },

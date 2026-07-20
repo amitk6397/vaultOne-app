@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Ban, CheckCircle2, Search } from 'lucide-react'
+import { Ban, CheckCircle2, Search, Trash2 } from 'lucide-react'
 import { EmptyState, ErrorMessage } from '../components/Feedback'
 import { StatusBadge } from '../components/ResourceItems'
 import { ResourceTable } from '../components/ResourceLayout'
@@ -34,6 +34,27 @@ export function UsersManager({ users, loading, onChanged }) {
       } else {
         await adminApi.unblockUser(user.id)
       }
+      await onChanged()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActionUserId(null)
+    }
+  }
+
+  const deleteUser = async (user) => {
+    const confirmed = confirm(
+      `Permanently delete ${user.full_name}? This removes the account, Vault data, media, files, chats, subscriptions and cannot be undone.`,
+    )
+    if (!confirmed) return
+    const secondConfirmation = confirm(
+      `Final confirmation: permanently delete ${user.email}?`,
+    )
+    if (!secondConfirmation) return
+    setError('')
+    setActionUserId(user.id)
+    try {
+      await adminApi.deleteUser(user.id)
       await onChanged()
     } catch (err) {
       setError(err.message)
@@ -88,19 +109,29 @@ export function UsersManager({ users, loading, onChanged }) {
               <p className="text-sm text-slate-600">{user.phone}</p>
               <StatusBadge active={user.is_active} />
               <p className="text-sm text-slate-500">{formatDate(user.created_at)}</p>
-              <button
-                type="button"
-                disabled={actionUserId === user.id}
-                onClick={() => toggleUserStatus(user)}
-                className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-black ${
-                  user.is_active
-                    ? 'border border-red-200 text-red-600 hover:bg-red-50'
-                    : 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                } disabled:opacity-60`}
-              >
-                {user.is_active ? <Ban size={16} /> : <CheckCircle2 size={16} />}
-                {user.is_active ? 'Block' : 'Unblock'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={actionUserId === user.id}
+                  onClick={() => toggleUserStatus(user)}
+                  className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-black ${
+                    user.is_active
+                      ? 'border border-red-200 text-red-600 hover:bg-red-50'
+                      : 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                  } disabled:opacity-60`}
+                >
+                  {user.is_active ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                  {user.is_active ? 'Block' : 'Unblock'}
+                </button>
+                <button
+                  type="button"
+                  disabled={actionUserId === user.id}
+                  onClick={() => deleteUser(user)}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-black text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  <Trash2 size={16} /> Delete
+                </button>
+              </div>
             </article>
           ))}
         </div>

@@ -211,7 +211,6 @@ class _ModuleStorageCard extends ConsumerWidget {
   IconData _storageModuleIcon(StorageModule module) => switch (module) {
     StorageModule.videos => Icons.video_library_rounded,
     StorageModule.photos => Icons.photo_library_rounded,
-    StorageModule.digiLocker => Icons.folder_shared_rounded,
     StorageModule.fileVault => Icons.folder_special_rounded,
   };
 }

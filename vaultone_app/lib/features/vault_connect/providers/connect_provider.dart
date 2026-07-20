@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../documents/providers/digi_locker_provider.dart';
+import '../../files_vault/providers/files_vault_provider.dart';
 import '../../media/models/media_item.dart';
 import '../../media/providers/media_provider.dart';
 import '../models/connect_models.dart';
@@ -124,6 +124,22 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
     await loadMessages(id);
   }
 
+  Future<ConnectConversation?> refreshConversation(String id) async {
+    try {
+      final refreshed = await _repository.conversation(id);
+      state = state.copyWith(
+        conversations: [
+          refreshed,
+          ...state.conversations.where((item) => item.id != id),
+        ],
+      );
+      return refreshed;
+    } catch (error) {
+      state = state.copyWith(error: error.toString());
+      return null;
+    }
+  }
+
   void leaveConversation(String id) => VaultConnectSocket.instance.leave(id);
 
   Future<void> loadMessages(String id, {bool more = false}) async {
@@ -187,6 +203,24 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
   }
 
   Future<void> retry(ConnectMessage message) async {
+    final localAttachment = message.attachments
+        .where((item) => item.localPath != null)
+        .firstOrNull;
+    if (localAttachment != null) {
+      final current = <ConnectMessage>[
+        ...(state.messages[message.conversationId] ?? const []),
+      ]..removeWhere((item) => item.clientMessageId == message.clientMessageId);
+      state = state.copyWith(
+        messages: {...state.messages, message.conversationId: current},
+      );
+      await sendFile(
+        message.conversationId,
+        File(localAttachment.localPath!),
+        localAttachment.fileType,
+        localAttachment.mimeType,
+      );
+      return;
+    }
     _replaceClient(
       message.conversationId,
       message.clientMessageId,
@@ -217,6 +251,30 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
     String mime,
   ) async {
     final key = file.path;
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getInt('user_id') ?? 0;
+    final clientId = 'flutter-file-${DateTime.now().microsecondsSinceEpoch}';
+    final pendingAttachment = ConnectAttachment(
+      id: clientId,
+      fileName: p.basename(file.path),
+      mimeType: mime,
+      fileSize: await file.length(),
+      fileType: kind,
+      uploadStatus: 'uploading',
+      progress: 0,
+      localPath: file.path,
+    );
+    final pendingMessage = ConnectMessage(
+      id: clientId,
+      clientMessageId: clientId,
+      conversationId: conversationId,
+      senderUserId: userId,
+      messageType: kind,
+      createdAt: DateTime.now(),
+      attachments: [pendingAttachment],
+      status: ConnectMessageStatus.uploading,
+    );
+    _prepend(conversationId, pendingMessage);
     state = state.copyWith(uploadProgress: {...state.uploadProgress, key: 0});
     File? transferCopy;
     try {
@@ -238,15 +296,19 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
           );
         },
       );
-      final clientId = 'flutter-file-${DateTime.now().microsecondsSinceEpoch}';
       final message = await _repository.send(
         conversationId: conversationId,
         clientMessageId: clientId,
         messageType: kind,
         attachmentIds: [attachment.id],
       );
-      _prepend(conversationId, message);
+      _replaceClient(conversationId, clientId, message);
     } catch (error) {
+      _replaceClient(
+        conversationId,
+        clientId,
+        pendingMessage.copyWith(status: ConnectMessageStatus.failed),
+      );
       state = state.copyWith(error: error.toString());
     } finally {
       if (transferCopy != null && await transferCopy.exists()) {
@@ -275,9 +337,9 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
             kind: kind == 'image' ? MediaKind.photo : MediaKind.video,
           );
     } else {
-      await _ref.read(digiLockerProvider.notifier).importFiles([
+      await _ref.read(filesVaultProvider.notifier).importPlatformFiles([
         PlatformFile(name: fileName, path: path, size: await source.length()),
-      ], 'other');
+      ]);
     }
   }
 
@@ -309,8 +371,32 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
     state = state.copyWith(messages: {...state.messages, id: const []});
   }
 
-  Future<void> block(ConnectConversation item) =>
-      _repository.block(item.participant.id);
+  Future<void> block(ConnectConversation item) async {
+    await _repository.block(item.participant.id);
+    _setBlocked(item.id, blocked: true, blockedByMe: true);
+  }
+
+  Future<void> unblock(ConnectConversation item) async {
+    await _repository.unblock(item.participant.id);
+    _setBlocked(item.id, blocked: false, blockedByMe: false);
+  }
+
+  void _setBlocked(
+    String conversationId, {
+    required bool blocked,
+    required bool blockedByMe,
+  }) {
+    state = state.copyWith(
+      conversations: [
+        for (final conversation in state.conversations)
+          if (conversation.id == conversationId)
+            conversation.copyWith(isBlocked: blocked, blockedByMe: blockedByMe)
+          else
+            conversation,
+      ],
+    );
+  }
+
   Future<void> report(
     ConnectConversation item,
     String category,
@@ -324,10 +410,8 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
 
   Future<String> download(ConnectAttachment item) async {
     final directory = await getTemporaryDirectory();
-    final target = p.join(
-      directory.path,
-      'vault_connect_${item.id}_${item.fileName}',
-    );
+    final safeName = item.fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final target = p.join(directory.path, 'vault_connect_${item.id}_$safeName');
     return _repository.download(
       item,
       target,
@@ -341,7 +425,14 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
 
   Future<void> openSecurely(ConnectAttachment item) async {
     final path = await download(item);
-    await OpenFilex.open(path);
+    final result = await OpenFilex.open(path);
+    if (result.type != ResultType.done) {
+      throw StateError(
+        result.message.isEmpty
+            ? 'No app is available to open this file type.'
+            : result.message,
+      );
+    }
   }
 
   Future<void> exportToDevice(ConnectAttachment item) async {
@@ -372,13 +463,13 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
                   : MediaKind.video,
             );
       } else {
-        await _ref.read(digiLockerProvider.notifier).importFiles([
+        await _ref.read(filesVaultProvider.notifier).importPlatformFiles([
           PlatformFile(
             name: item.fileName,
             path: path,
             size: await file.length(),
           ),
-        ], 'other');
+        ]);
       }
       await box.put(item.id, DateTime.now().toIso8601String());
       return true;

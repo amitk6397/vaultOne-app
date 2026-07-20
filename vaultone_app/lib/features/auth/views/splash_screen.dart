@@ -10,6 +10,7 @@ import '../../../core/localization/app_language_controller.dart';
 import '../../../constants/auth_constants.dart';
 import '../../../constants/app_image.dart';
 import '../../../shared/widgets/app_loading_indicator.dart';
+import '../../../core/security/secure_token_store.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -36,7 +37,17 @@ class _SplashScreenState extends State<SplashScreen> {
       context.goNamed(AppRoutes.languageName);
       return;
     }
-    context.goNamed(AppRoutes.homeName);
+    final isLoggedIn = await SecureTokenStore.instance.isLoggedIn();
+    if (!mounted) return;
+    if (isLoggedIn) {
+      context.goNamed(AppRoutes.homeName);
+      return;
+    }
+    final onboardingCompleted =
+        preferences.getBool(AuthConstants.onboardingCompletedKey) ?? false;
+    context.goNamed(
+      onboardingCompleted ? AppRoutes.loginName : AppRoutes.onboardingName,
+    );
   }
 
   @override

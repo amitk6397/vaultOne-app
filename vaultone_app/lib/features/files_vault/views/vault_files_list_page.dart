@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -216,6 +217,43 @@ class _VaultFilesListPageState extends ConsumerState<VaultFilesListPage> {
                       style: AppTextStyles.body.copyWith(fontSize: 11),
                     ),
                   ],
+                  if (_selectedIds.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Material(
+                      color: AppColors.purple.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.purple,
+                              size: 21,
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                '${_selectedIds.length} file${_selectedIds.length == 1 ? '' : 's'} selected',
+                                style: AppTextStyles.label.copyWith(
+                                  color: AppColors.purple,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  setState(() => _selectedIds.clear()),
+                              child: const Text('Clear'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                 ],
               ),
@@ -262,46 +300,76 @@ class _VaultFilesListPageState extends ConsumerState<VaultFilesListPage> {
   ) {
     final selected = _selectedIds.contains(file.id);
     return GestureDetector(
-      onLongPress: () => setState(() => _selectedIds.add(file.id)),
-      child: DecoratedBox(
+      onLongPress: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedIds.add(file.id));
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.all(selected ? 3 : 0),
         decoration: BoxDecoration(
-          border: Border.all(
-            color: selected ? AppColors.purple : Colors.transparent,
-            width: 2,
-          ),
+          color: selected ? AppColors.purple : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AppColors.purple.withValues(alpha: .28),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
-        child: VaultFileCard(
-          file: file,
-          isGrid: isGrid,
-          onTap: () {
-            if (_selectedIds.isNotEmpty) {
-              setState(
-                () => selected
-                    ? _selectedIds.remove(file.id)
-                    : _selectedIds.add(file.id),
-              );
-            } else {
-              context.pushNamed(
-                AppRoutes.filesVaultPreviewName,
-                pathParameters: {'fileId': file.id},
-              );
-            }
-          },
-          onDelete: () async {
-            await controller.deleteFile(file.id);
-            if (!context.mounted) return;
-            AppFeedback.showSnackBar(
-              context,
-              message: context.l10n.tr(
-                'file_deleted_named',
-                args: {'file': file.name},
+        child: Stack(
+          children: [
+            VaultFileCard(
+              file: file,
+              isGrid: isGrid,
+              onTap: () {
+                if (_selectedIds.isNotEmpty) {
+                  HapticFeedback.selectionClick();
+                  setState(
+                    () => selected
+                        ? _selectedIds.remove(file.id)
+                        : _selectedIds.add(file.id),
+                  );
+                } else {
+                  context.pushNamed(
+                    AppRoutes.filesVaultPreviewName,
+                    pathParameters: {'fileId': file.id},
+                  );
+                }
+              },
+              onDelete: () async {
+                await controller.deleteFile(file.id);
+                if (!context.mounted) return;
+                AppFeedback.showSnackBar(
+                  context,
+                  message: context.l10n.tr(
+                    'file_deleted_named',
+                    args: {'file': file.name},
+                  ),
+                );
+              },
+              onFavorite: () => controller.toggleFavorite(file.id),
+              onArchive: () => controller.archiveFile(file.id),
+              onTogglePrivate: () => controller.togglePrivate(file.id),
+            ),
+            if (selected)
+              const Positioned(
+                top: 8,
+                left: 8,
+                child: CircleAvatar(
+                  radius: 13,
+                  backgroundColor: AppColors.purple,
+                  child: Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
               ),
-            );
-          },
-          onFavorite: () => controller.toggleFavorite(file.id),
-          onArchive: () => controller.archiveFile(file.id),
-          onTogglePrivate: () => controller.togglePrivate(file.id),
+          ],
         ),
       ),
     );

@@ -40,14 +40,6 @@ class ModuleSecurityPage extends ConsumerWidget {
         notifier.setSecureNotesSecurity,
       ),
       _ModuleSecurityItem(
-        'digi_locker',
-        'protect_digi_locker',
-        Icons.folder_shared_rounded,
-        const Color(0xFFEA580C),
-        profile.digiLockerSecurityEnabled,
-        notifier.setDigiLockerSecurity,
-      ),
-      _ModuleSecurityItem(
         'private_photos',
         'protect_private_photos',
         Icons.photo_library_rounded,

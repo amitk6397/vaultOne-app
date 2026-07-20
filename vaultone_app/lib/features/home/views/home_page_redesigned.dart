@@ -10,8 +10,6 @@ import '../../../constants/app_image.dart';
 import '../../../constants/app_text_styles.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../routes/app_routes.dart';
-import '../../documents/providers/digi_locker_provider.dart';
-import '../../documents/document_localizations.dart';
 import '../../files_vault/providers/files_vault_provider.dart';
 import '../models/home_banner.dart';
 import '../providers/banner_provider.dart';
@@ -46,7 +44,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     final files = ref.watch(filesVaultProvider);
     final passwords = ref.watch(passwordVaultProvider);
     final notifications = ref.watch(notificationProvider);
-    final documents = ref.watch(digiLockerProvider);
     final media = ref.watch(mediaLibraryProvider);
     final customization = ref.watch(homeCustomizationProvider);
     final photoCount = media.items
@@ -102,21 +99,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         AppRoutes.passwordsName,
       ),
       _QuickItem(
-        HomeModuleId.documents,
-        context.l10n.tr('digi_locker'),
-        context.l10n.tr(
-          'docs_count',
-          args: {'count': documents.documents.length},
-        ),
-        Icons.account_balance_rounded,
-        AppImages.moduleDigiLocker,
-        customization.colorFor(
-          HomeModuleId.documents,
-          _moduleColor(HomeModuleId.documents),
-        ),
-        AppRoutes.documentsName,
-      ),
-      _QuickItem(
         HomeModuleId.photos,
         context.l10n.tr('photos'),
         context.l10n.tr('photos_count', args: {'count': photoCount}),
@@ -155,7 +137,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     ];
     final orderedQuickItems = _orderedQuickItems(quickItems, customization);
 
-    final recentItems = _recentItems(context, files, documents, passwords);
+    final recentItems = _recentItems(context, files, passwords);
     final notificationCount = notifications.unreadCount;
     final securityScore = (100 - passwords.weakPasswords * 8)
         .clamp(60, 100)
@@ -269,7 +251,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   static List<_RecentItem> _recentItems(
     BuildContext context,
     FilesVaultState files,
-    DigiLockerState documents,
     PasswordVaultState passwords,
   ) {
     final items = <_RecentItem>[
@@ -283,17 +264,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           file.color,
           file.updatedAt,
           AppRoutes.filesVaultName,
-        ),
-      for (final doc in documents.documents)
-        _RecentItem(
-          localizedDocumentTitle(context, doc),
-          context.l10n.tr('digi_locker'),
-          _timeAgo(context, doc.updatedAt),
-          context.l10n.tr(doc.isVerified ? 'verified' : 'added'),
-          Icons.description_rounded,
-          AppColors.blue,
-          doc.updatedAt,
-          AppRoutes.documentsName,
         ),
       for (final entry in passwords.entries)
         _RecentItem(
@@ -2033,7 +2003,6 @@ String _moduleTitle(BuildContext context, HomeModuleId id) {
     HomeModuleId.connect => 'Vault Connect',
     HomeModuleId.files => context.l10n.tr('file_vault'),
     HomeModuleId.passwords => context.l10n.tr('passwords'),
-    HomeModuleId.documents => context.l10n.tr('digi_locker'),
     HomeModuleId.photos => context.l10n.tr('photos'),
     HomeModuleId.videos => context.l10n.tr('videos'),
     HomeModuleId.scanner => context.l10n.tr('ocr_scanner'),
@@ -2045,7 +2014,6 @@ IconData _moduleIcon(HomeModuleId id) {
     HomeModuleId.connect => Icons.forum_rounded,
     HomeModuleId.files => Icons.folder_special_rounded,
     HomeModuleId.passwords => Icons.lock_rounded,
-    HomeModuleId.documents => Icons.account_balance_rounded,
     HomeModuleId.photos => Icons.image_rounded,
     HomeModuleId.videos => Icons.play_circle_rounded,
     HomeModuleId.scanner => Icons.document_scanner_rounded,
@@ -2057,7 +2025,6 @@ Color _moduleColor(HomeModuleId id) {
     HomeModuleId.connect => const Color(0xFF5B4BFF),
     HomeModuleId.files => const Color(0xFF7C3DFF),
     HomeModuleId.passwords => const Color(0xFF39C978),
-    HomeModuleId.documents => const Color(0xFF2F86FF),
     HomeModuleId.photos => const Color(0xFF29A8FF),
     HomeModuleId.videos => const Color(0xFF6E4BFF),
     HomeModuleId.scanner => const Color(0xFFFF8B22),

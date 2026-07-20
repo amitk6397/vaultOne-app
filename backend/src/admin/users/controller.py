@@ -19,3 +19,10 @@ class AdminUserController:
     async def unblock_user(self, user_id: int) -> DataResponse:
         user = await self.service.set_user_active(user_id, is_active=True)
         return DataResponse(message="User unblocked successfully", data=user)
+
+    async def delete_user(self, user_id: int) -> DataResponse:
+        deleted = await self.service.delete_user(user_id)
+        return DataResponse(
+            message="User and all associated data deleted permanently",
+            data=deleted,
+        )

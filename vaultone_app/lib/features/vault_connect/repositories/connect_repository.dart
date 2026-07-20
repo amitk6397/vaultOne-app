@@ -47,6 +47,11 @@ class VaultConnectRepository {
     return ConnectConversation.fromJson(_data(response));
   }
 
+  Future<ConnectConversation> conversation(String id) async {
+    final response = await _api.get(AppUrl.connectConversation(id));
+    return ConnectConversation.fromJson(_data(response));
+  }
+
   Future<({List<ConnectConversation> items, String? cursor})> conversations({
     String? cursor,
   }) async {
@@ -224,6 +229,7 @@ class VaultConnectRepository {
     await _dio.download(
       url,
       targetPath,
+      options: Options(extra: {'skip_auth_refresh': true}),
       onReceiveProgress: (received, total) {
         onProgress?.call(total <= 0 ? 0 : received / total);
       },

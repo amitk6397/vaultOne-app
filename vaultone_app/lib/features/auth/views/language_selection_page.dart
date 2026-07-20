@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/localization/app_language_controller.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../routes/app_routes.dart';
 import '../../../shared/widgets/app_loading_indicator.dart';
 import '../../../constants/app_image.dart';
+import '../../../core/security/secure_token_store.dart';
+import '../../../constants/auth_constants.dart';
 
 class LanguageSelectionPage extends ConsumerStatefulWidget {
   const LanguageSelectionPage({super.key});
@@ -25,7 +28,19 @@ class _LanguageSelectionPageState extends ConsumerState<LanguageSelectionPage> {
     setState(() => _isSaving = true);
     await ref.read(appLanguageProvider.notifier).select(_selectedLanguage);
     if (!mounted) return;
-    context.goNamed(AppRoutes.homeName);
+    final isLoggedIn = await SecureTokenStore.instance.isLoggedIn();
+    if (!mounted) return;
+    if (isLoggedIn) {
+      context.goNamed(AppRoutes.homeName);
+      return;
+    }
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final onboardingCompleted =
+        preferences.getBool(AuthConstants.onboardingCompletedKey) ?? false;
+    context.goNamed(
+      onboardingCompleted ? AppRoutes.loginName : AppRoutes.onboardingName,
+    );
   }
 
   @override

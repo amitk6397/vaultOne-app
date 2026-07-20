@@ -60,19 +60,6 @@ class AppRoutes {
   static const assetsName = 'assets';
   static const assetsPath = '/assets';
 
-  static const documentsName = 'documents';
-  static const documentsPath = '/documents';
-  static const documentCardName = 'document-card';
-  static const documentCardPath = '/documents/card/:cardId';
-  static const documentScanName = 'document-scan';
-  static const documentScanPath = '/documents/scan';
-  static const documentFolderName = 'document-folder';
-  static const documentFolderPath = '/documents/folder/:folderId';
-  static const documentPreviewName = 'document-preview';
-  static const documentPreviewPath = '/documents/preview/:documentId';
-  static const documentAlertsName = 'document-alerts';
-  static const documentAlertsPath = '/documents/alerts';
-
   static const aiName = 'ai';
   static const aiPath = '/ai';
 

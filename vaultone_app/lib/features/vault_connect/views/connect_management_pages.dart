@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../constants/app_colors.dart';
 import '../../../routes/app_routes.dart';
-import '../../documents/providers/digi_locker_provider.dart';
 import '../../files_vault/providers/files_vault_provider.dart';
 import '../../media/providers/media_provider.dart';
 import '../models/connect_models.dart';
@@ -33,7 +32,7 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Attachment preview')),
     body: Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Column(
         children: [
           Expanded(
@@ -77,34 +76,37 @@ class _AttachmentPreviewPageState extends ConsumerState<AttachmentPreviewPage> {
               ),
             ),
           ),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: sending
-                  ? null
-                  : () async {
-                      setState(() => sending = true);
-                      await ref
-                          .read(vaultConnectProvider.notifier)
-                          .sendFile(
-                            widget.conversationId,
-                            File(widget.file.path),
-                            widget.file.kind,
-                            widget.file.mime,
-                          );
-                      if (context.mounted) context.pop();
-                    },
-              icon: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded),
-              label: const Text('Send securely'),
-            ),
-          ),
         ],
+      ),
+    ),
+    bottomNavigationBar: SafeArea(
+      minimum: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      child: SizedBox(
+        height: 52,
+        child: FilledButton.icon(
+          onPressed: sending
+              ? null
+              : () async {
+                  setState(() => sending = true);
+                  await ref
+                      .read(vaultConnectProvider.notifier)
+                      .sendFile(
+                        widget.conversationId,
+                        File(widget.file.path),
+                        widget.file.kind,
+                        widget.file.mime,
+                      );
+                  if (context.mounted) context.pop();
+                },
+          icon: sending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+          label: const Text('Send securely'),
+        ),
       ),
     ),
   );
@@ -126,10 +128,6 @@ class VaultConnectFilePickerPage extends ConsumerWidget {
         .watch(mediaLibraryProvider)
         .items
         .where((x) => !x.isDeleted && x.path != null);
-    final documents = ref
-        .watch(digiLockerProvider)
-        .documents
-        .where((x) => x.filePath != null);
     final picks = <PickedConnectFile>[
       for (final item in files)
         PickedConnectFile(
@@ -148,13 +146,6 @@ class VaultConnectFilePickerPage extends ConsumerWidget {
           name: item.title,
           kind: item.kind.name == 'photo' ? 'image' : 'video',
           mime: _mimeFor(item.title),
-        ),
-      for (final item in documents)
-        PickedConnectFile(
-          path: item.filePath!,
-          name: item.fileName,
-          kind: 'document',
-          mime: _mimeFor(item.fileName),
         ),
     ];
     return Scaffold(
@@ -260,85 +251,103 @@ class ChatSettingsPage extends ConsumerWidget {
   };
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    appBar: AppBar(title: const Text('Chat settings')),
-    body: ListView(
-      children: [
-        ListTile(
-          leading: const Icon(Icons.timer_outlined),
-          title: const Text('Disappearing messages'),
-          subtitle: Text(options[conversation.disappearingSeconds] ?? 'Off'),
-          onTap: () async {
-            final selected = await showModalBottomSheet<int>(
-              context: context,
-              builder: (_) => SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final option in options.entries)
-                      RadioListTile<int>(
-                        value: option.key,
-                        groupValue: conversation.disappearingSeconds,
-                        title: Text(option.value),
-                        onChanged: (value) => Navigator.pop(context, value),
-                      ),
-                  ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final conversations = ref.watch(vaultConnectProvider).conversations;
+    final current = conversations
+        .where((item) => item.id == conversation.id)
+        .firstOrNull;
+    final item = current ?? conversation;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chat settings')),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.timer_outlined),
+            title: const Text('Disappearing messages'),
+            subtitle: Text(options[item.disappearingSeconds] ?? 'Off'),
+            onTap: () async {
+              final selected = await showModalBottomSheet<int>(
+                context: context,
+                builder: (_) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final option in options.entries)
+                        RadioListTile<int>(
+                          value: option.key,
+                          groupValue: item.disappearingSeconds,
+                          title: Text(option.value),
+                          onChanged: (value) => Navigator.pop(context, value),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-            if (selected != null) {
-              await ref
-                  .read(vaultConnectProvider.notifier)
-                  .setDisappearing(conversation.id, selected);
-            }
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.perm_media_outlined),
-          title: const Text('Shared media & documents'),
-          onTap: () => context.pushNamed(
-            AppRoutes.connectSharedName,
-            pathParameters: {'conversationId': conversation.id},
+              );
+              if (selected != null) {
+                await ref
+                    .read(vaultConnectProvider.notifier)
+                    .setDisappearing(item.id, selected);
+              }
+            },
           ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.delete_sweep_outlined),
-          title: const Text('Clear conversation'),
-          subtitle: const Text('Clears history only for you'),
-          onTap: () async {
-            final yes = await _confirm(context, 'Clear this conversation?');
-            if (yes) {
-              await ref
-                  .read(vaultConnectProvider.notifier)
-                  .clearConversation(conversation.id);
-            }
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.block, color: Colors.red),
-          title: const Text('Block user'),
-          onTap: () async {
-            final yes = await _confirm(
-              context,
-              'Block ${conversation.participant.displayName}?',
-            );
-            if (yes) {
-              await ref.read(vaultConnectProvider.notifier).block(conversation);
-              if (context.mounted) context.goNamed(AppRoutes.connectHomeName);
-            }
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.flag_outlined, color: Colors.red),
-          title: const Text('Report user'),
-          onTap: () => context.pushNamed(
-            AppRoutes.connectReportName,
-            extra: conversation,
+          ListTile(
+            leading: const Icon(Icons.perm_media_outlined),
+            title: const Text('Shared media & documents'),
+            onTap: () => context.pushNamed(
+              AppRoutes.connectSharedName,
+              pathParameters: {'conversationId': item.id},
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+          ListTile(
+            leading: const Icon(Icons.delete_sweep_outlined),
+            title: const Text('Clear conversation'),
+            subtitle: const Text('Clears history only for you'),
+            onTap: () async {
+              final yes = await _confirm(context, 'Clear this conversation?');
+              if (yes) {
+                await ref
+                    .read(vaultConnectProvider.notifier)
+                    .clearConversation(item.id);
+              }
+            },
+          ),
+          ListTile(
+            leading: Icon(
+              item.blockedByMe ? Icons.lock_open_rounded : Icons.block,
+              color: Colors.red,
+            ),
+            title: Text(item.blockedByMe ? 'Unblock user' : 'Block user'),
+            subtitle: item.isBlocked && !item.blockedByMe
+                ? const Text('This user has blocked messaging')
+                : null,
+            enabled: !item.isBlocked || item.blockedByMe,
+            onTap: () async {
+              final yes = await _confirm(
+                context,
+                item.blockedByMe
+                    ? 'Unblock ${item.participant.displayName}?'
+                    : 'Block ${item.participant.displayName}?',
+              );
+              if (yes) {
+                final controller = ref.read(vaultConnectProvider.notifier);
+                if (item.blockedByMe) {
+                  await controller.unblock(item);
+                } else {
+                  await controller.block(item);
+                }
+              }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.flag_outlined, color: Colors.red),
+            title: const Text('Report user'),
+            onTap: () =>
+                context.pushNamed(AppRoutes.connectReportName, extra: item),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<bool> _confirm(BuildContext context, String title) async =>
       await showDialog<bool>(
@@ -368,6 +377,7 @@ class BlockedUsersPage extends ConsumerStatefulWidget {
 
 class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
   late Future<List<Map<String, dynamic>>> future;
+  final Set<int> unblocking = <int>{};
   @override
   void initState() {
     super.initState();
@@ -402,13 +412,16 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
               title: Text(user['full_name']?.toString() ?? 'VaultOne user'),
               subtitle: Text(user['phone']?.toString() ?? ''),
               trailing: TextButton(
-                onPressed: () async {
-                  await ref
-                      .read(connectRepositoryProvider)
-                      .unblock((user['id'] as num).toInt());
-                  refresh();
-                },
-                child: const Text('Unblock'),
+                onPressed: unblocking.contains((user['id'] as num).toInt())
+                    ? null
+                    : () => _unblock((user['id'] as num).toInt()),
+                child: unblocking.contains((user['id'] as num).toInt())
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Unblock'),
               ),
             );
           },
@@ -416,6 +429,26 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       },
     ),
   );
+
+  Future<void> _unblock(int userId) async {
+    setState(() => unblocking.add(userId));
+    try {
+      await ref.read(connectRepositoryProvider).unblock(userId);
+      ref.invalidate(vaultConnectProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User unblocked successfully')),
+      );
+      refresh();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not unblock user: $error')));
+    } finally {
+      if (mounted) setState(() => unblocking.remove(userId));
+    }
+  }
 }
 
 class ReportUserPage extends ConsumerStatefulWidget {

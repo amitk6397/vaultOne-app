@@ -10,6 +10,7 @@ import '../../../shared/widgets/light_auth_widgets.dart';
 import '../models/request/auth_requests.dart';
 import '../providers/auth_provider.dart';
 import '../providers/auth_ui_provider.dart';
+import '../session_refresh.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -276,6 +277,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         queryParameters: {'identity': identity, 'purpose': 'login'},
       );
     } else {
+      refreshAuthenticatedData(ref);
       context.goNamed(AppRoutes.homeName);
     }
   }

@@ -262,6 +262,25 @@ class PasswordVaultController extends StateNotifier<PasswordVaultState> {
     }
   }
 
+  Future<int> syncAllToDatabase() async {
+    var synced = 0;
+    for (final entry in List<PasswordEntry>.of(state.entries)) {
+      await _repository.syncPassword(entry);
+      synced++;
+    }
+    for (final note in List<SecureNote>.of(state.notes)) {
+      await _repository.syncNote(note);
+      synced++;
+    }
+    return synced;
+  }
+
+  Future<void> clearLocalCache() async {
+    await _passwordBox?.clear();
+    await _notesBox?.clear();
+    state = state.copyWith(entries: const [], notes: const []);
+  }
+
   Future<void> _syncPassword(PasswordEntry entry) async {
     try {
       await _repository.syncPassword(entry);

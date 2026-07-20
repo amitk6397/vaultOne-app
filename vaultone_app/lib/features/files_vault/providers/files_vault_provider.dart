@@ -382,6 +382,20 @@ class FilesVaultController extends StateNotifier<FilesVaultState> {
     state = state.copyWith(files: const [], folders: const []);
   }
 
+  Future<int> syncNonVideoToDatabase() async {
+    var syncedCount = 0;
+    final files = List<VaultFile>.of(
+      state.files,
+    ).where((file) => file.type != VaultFileType.video);
+    for (final file in files) {
+      final synced = await _repository.uploadFile(file);
+      await _box?.put(file.id, synced.toMap());
+      syncedCount++;
+    }
+    state = state.copyWith(files: _readFiles());
+    return syncedCount;
+  }
+
   Future<void> _syncUpload(VaultFile file) async {
     state = state.copyWith(isUploading: true, uploadingFileName: file.name);
     try {

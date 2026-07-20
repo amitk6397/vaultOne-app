@@ -9,9 +9,10 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../routes/app_routes.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/app_page_header.dart';
-import '../../documents/providers/digi_locker_provider.dart';
 import '../../files_vault/providers/files_vault_provider.dart';
+import '../../media/providers/media_provider.dart';
 import '../../passwords/providers/password_vault_provider.dart';
+import '../../scanner/providers/scanner_provider.dart';
 import '../../subscriptions/providers/subscription_provider.dart';
 import '../../notifications/providers/notification_provider.dart';
 import '../providers/profile_provider.dart';
@@ -22,7 +23,6 @@ class ProfilePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
-    final documents = ref.watch(digiLockerProvider);
     final passwords = ref.watch(passwordVaultProvider);
     final files = ref.watch(filesVaultProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -68,7 +68,6 @@ class ProfilePage extends ConsumerWidget {
                 child: Transform.translate(
                   offset: Offset.zero,
                   child: _StatsRow(
-                    documents: documents.documents.length,
                     passwords: passwords.totalPasswords,
                     files: files.activeCount,
                   ),
@@ -182,7 +181,7 @@ class ProfilePage extends ConsumerWidget {
   }
 
   Future<void> _showLogoutSheet(BuildContext context, WidgetRef ref) async {
-    var deleteSavedData = false;
+    var backupBeforeLogout = false;
     final shouldLogout = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -217,19 +216,34 @@ class ProfilePage extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      context.l10n.tr('logout_delete_data_question'),
+                      'Logging out removes VaultOne-managed local data from '
+                      'this device. Your original phone gallery stays safe.',
                       style: AppTextStyles.body.copyWith(fontSize: 13),
                     ),
                     const SizedBox(height: 10),
                     CheckboxListTile(
-                      value: deleteSavedData,
-                      onChanged: (value) =>
-                          setSheetState(() => deleteSavedData = value ?? false),
+                      value: backupBeforeLogout,
+                      onChanged: (value) => setSheetState(
+                        () => backupBeforeLogout = value ?? false,
+                      ),
                       activeColor: AppColors.purple,
                       contentPadding: EdgeInsets.zero,
-                      title: Text(context.l10n.tr('delete_saved_local_data')),
-                      subtitle: Text(
-                        context.l10n.tr('delete_saved_local_data_description'),
+                      title: const Text('Back up local data before logout'),
+                      subtitle: const Text(
+                        'Uploads passwords, secure notes, files and photos to '
+                        'your account before clearing them from this device. '
+                        'Videos are not uploaded because they can quickly fill '
+                        'the storage included in your plan.',
+                      ),
+                    ),
+                    const Text(
+                      'Private videos stored by VaultOne will be removed from '
+                      'this device on logout. Move or back them up manually if '
+                      'you need to keep them.',
+                      style: TextStyle(
+                        color: AppColors.danger,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -263,20 +277,69 @@ class ProfilePage extends ConsumerWidget {
     );
 
     if (!(shouldLogout ?? false)) return;
+    if (backupBeforeLogout) {
+      try {
+        await ref.read(passwordVaultProvider.notifier).syncAllToDatabase();
+        await ref.read(filesVaultProvider.notifier).syncNonVideoToDatabase();
+        await ref
+            .read(mediaLibraryProvider.notifier)
+            .syncLocalPhotosToDatabase();
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Backup failed, so logout was cancelled to protect your data: '
+                '$error',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+    final cleanupErrors = <Object>[];
+    Future<void> clearSafely(Future<void> Function() clear) async {
+      try {
+        await clear();
+      } catch (error) {
+        cleanupErrors.add(error);
+      }
+    }
+
+    await clearSafely(
+      () => ref.read(passwordVaultProvider.notifier).clearLocalCache(),
+    );
+    await clearSafely(
+      () => ref.read(filesVaultProvider.notifier).clearLocalCache(),
+    );
+    await clearSafely(
+      () => ref.read(mediaLibraryProvider.notifier).clearVaultOneLocalData(),
+    );
+    await clearSafely(
+      () => ref.read(scannerProvider.notifier).clearLocalCache(),
+    );
     await ref
         .read(profileProvider.notifier)
-        .clearSession(deleteSavedData: deleteSavedData);
+        .clearSession(deleteSavedData: true);
     ref.invalidate(subscriptionProvider);
     ref.invalidate(notificationProvider);
-    ref.invalidate(digiLockerProvider);
     ref.invalidate(passwordVaultProvider);
     ref.invalidate(filesVaultProvider);
+    ref.invalidate(mediaLibraryProvider);
+    ref.invalidate(scannerProvider);
     ref.invalidate(profileProvider);
-    if (deleteSavedData) {
-      await ref.read(filesVaultProvider.notifier).clearLocalCache();
-    }
     if (context.mounted) {
       context.goNamed(AppRoutes.loginName);
+      if (cleanupErrors.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Logged out. Some damaged local cache could not be removed.',
+            ),
+          ),
+        );
+      }
     }
   }
 }
@@ -482,13 +545,8 @@ class _ProfileHeroHeader extends StatelessWidget {
 // ── Stats Row ─────────────────────────────────────────────────────────────────
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({
-    required this.documents,
-    required this.passwords,
-    required this.files,
-  });
+  const _StatsRow({required this.passwords, required this.files});
 
-  final int documents;
   final int passwords;
   final int files;
 
@@ -511,21 +569,6 @@ class _StatsRow extends StatelessWidget {
       child: IntrinsicHeight(
         child: Row(
           children: [
-            Expanded(
-              child: _StatCell(
-                icon: Icons.account_balance_rounded,
-                label: context.l10n.tr('documents'),
-                value: '$documents',
-                color: AppColors.blue,
-              ),
-            ),
-            VerticalDivider(
-              width: 1,
-              thickness: 1,
-              indent: 16,
-              endIndent: 16,
-              color: colors.outlineVariant.withValues(alpha: .5),
-            ),
             Expanded(
               child: _StatCell(
                 icon: Icons.lock_rounded,

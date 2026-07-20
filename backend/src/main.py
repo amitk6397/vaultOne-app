@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import suppress
 
 from fastapi import FastAPI
@@ -9,9 +10,12 @@ from starlette.requests import Request
 from src.admin.routes import router as admin_router
 from src.config.settings import settings
 from src.database.session import close_db, init_db
+from src.core.notifications import initialize_firebase
 from src.shared.dtos import DataResponse
 from src.user.routes import router as user_router
 from src.user.connect.cleanup import cleanup_loop
+
+logger = logging.getLogger(__name__)
 
 
 class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
@@ -44,6 +48,12 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def on_startup() -> None:
         await init_db()
+        try:
+            initialize_firebase()
+            app.state.firebase_ready = True
+        except RuntimeError as error:
+            app.state.firebase_ready = False
+            logger.warning("Firebase Admin is unavailable: %s", error)
         app.state.vault_connect_cleanup = asyncio.create_task(cleanup_loop())
 
     @app.on_event("shutdown")
@@ -57,7 +67,15 @@ def create_app() -> FastAPI:
 
     @app.get("/health", response_model=DataResponse, tags=["health"])
     async def health_check() -> DataResponse:
-        return DataResponse(message="Health check successful", data={"status": "ok"})
+        return DataResponse(
+            message="Health check successful",
+            data={
+                "status": "ok",
+                "firebase": "ready"
+                if getattr(app.state, "firebase_ready", False)
+                else "unavailable",
+            },
+        )
 
     return app
 

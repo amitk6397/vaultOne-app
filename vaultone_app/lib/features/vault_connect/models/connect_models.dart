@@ -43,6 +43,7 @@ class ConnectAttachment {
     this.checksum,
     this.uploadStatus = 'complete',
     this.progress = 1,
+    this.localPath,
   });
   final String id;
   final String fileName;
@@ -52,6 +53,7 @@ class ConnectAttachment {
   final String? checksum;
   final String uploadStatus;
   final double progress;
+  final String? localPath;
   factory ConnectAttachment.fromJson(Map<String, dynamic> json) =>
       ConnectAttachment(
         id: json['id']?.toString() ?? '',
@@ -145,6 +147,7 @@ class ConnectConversation {
     this.lastMessageAt,
     this.disappearingSeconds = 0,
     this.isBlocked = false,
+    this.blockedByMe = false,
     this.isMuted = false,
   });
   final String id;
@@ -154,7 +157,21 @@ class ConnectConversation {
   final DateTime createdAt;
   final int disappearingSeconds;
   final bool isBlocked;
+  final bool blockedByMe;
   final bool isMuted;
+
+  ConnectConversation copyWith({bool? isBlocked, bool? blockedByMe}) =>
+      ConnectConversation(
+        id: id,
+        participant: participant,
+        createdAt: createdAt,
+        lastMessage: lastMessage,
+        lastMessageAt: lastMessageAt,
+        disappearingSeconds: disappearingSeconds,
+        isBlocked: isBlocked ?? this.isBlocked,
+        blockedByMe: blockedByMe ?? this.blockedByMe,
+        isMuted: isMuted,
+      );
 
   factory ConnectConversation.fromJson(Map<String, dynamic> json) =>
       ConnectConversation(
@@ -178,6 +195,7 @@ class ConnectConversation {
         disappearingSeconds:
             (json['disappearing_duration_seconds'] as num?)?.toInt() ?? 0,
         isBlocked: json['is_blocked'] == true,
+        blockedByMe: json['blocked_by_me'] == true,
         isMuted: json['is_muted'] == true,
       );
 }
