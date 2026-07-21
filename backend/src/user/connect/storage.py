@@ -40,10 +40,17 @@ async def finalize_private_upload(path: Path, storage_key: str) -> str:
 def signed_private_download_url(storage_key: str, file_name: str) -> str:
     if not is_cloud_key(storage_key):
         raise ValueError("Signed cloud URL requested for a local attachment")
-    public_id = storage_key.removeprefix(CLOUD_PREFIX)
+    stored_public_id = storage_key.removeprefix(CLOUD_PREFIX)
+    # Cloudinary's private download API requires the asset format separately.
+    # Raw uploads keep the extension in public_id, so passing an empty format
+    # signs a different request and Cloudinary rejects it with HTTP 401.
+    suffix = Path(stored_public_id).suffix
+    if not suffix:
+        raise ValueError("Cloud attachment is missing its file format")
+    public_id = stored_public_id[: -len(suffix)]
     return cloudinary.utils.private_download_url(
         public_id,
-        "",
+        suffix.lstrip(".").lower(),
         resource_type="raw",
         type="authenticated",
         attachment=file_name,

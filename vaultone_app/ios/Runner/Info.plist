@@ -6,6 +6,8 @@
 	<string>VaultOne uses phone numbers locally to find contacts who already use VaultOne. Your complete contact list is not stored.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>VaultOne needs photo library access to show photos and videos by folder.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VaultOne needs microphone access to record and send voice messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>VaultOne needs permission to manage private media and deleted items.</string>
 	<key>NSFaceIDUsageDescription</key>

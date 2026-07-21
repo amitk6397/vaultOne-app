@@ -98,9 +98,9 @@ class UserResponse(ORMModel):
 
 
 class RegisterResponse(BaseModel):
-    user: UserResponse
+    user: UserResponse | None = None
     otp: str | None = None
-    message: str = "Registration successful"
+    message: str = "OTP sent; registration is pending verification"
 
 
 class UserAuthResponse(BaseModel):

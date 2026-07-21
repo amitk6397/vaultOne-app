@@ -22,13 +22,15 @@ DEFAULT_EXTENSIONS = {
     "image": {"jpg", "jpeg", "png", "gif", "webp", "heic"},
     "video": {"mp4", "mov", "m4v", "webm", "3gp"},
     "document": {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "zip"},
+    "voice": {"m4a", "aac"},
 }
-MIME_PREFIX = {"image": "image/", "video": "video/"}
+MIME_PREFIX = {"image": "image/", "video": "video/", "voice": "audio/"}
 MAGIC = {
     "jpg": (b"\xff\xd8\xff",), "jpeg": (b"\xff\xd8\xff",),
     "png": (b"\x89PNG\r\n\x1a\n",), "gif": (b"GIF87a", b"GIF89a"),
     "pdf": (b"%PDF-",), "zip": (b"PK\x03\x04", b"PK\x05\x06"),
-    "mp4": (b"ftyp",), "webp": (b"RIFF",),
+    "mp4": (b"ftyp",), "m4a": (b"ftyp",),
+    "aac": (b"\xff\xf1", b"\xff\xf9"), "webp": (b"RIFF",),
 }
 
 
@@ -367,12 +369,15 @@ def safe_filename(value: str) -> str:
 
 async def validate_upload(db: AsyncSession, file_name: str, mime: str, size: int, kind: str) -> None:
     cfg = await config(db)
-    limit = {"image": cfg.image_limit_bytes, "video": cfg.video_limit_bytes, "document": cfg.document_limit_bytes}[kind]
+    limit = {"image": cfg.image_limit_bytes, "video": cfg.video_limit_bytes, "document": cfg.document_limit_bytes, "voice": cfg.document_limit_bytes}[kind]
     extension = Path(file_name).suffix.lower().lstrip(".")
     allowed = set(cfg.allowed_extensions or DEFAULT_EXTENSIONS[kind])
     if size > limit:
         raise HTTPException(413, f"{kind.title()} exceeds the configured size limit")
-    if extension not in allowed or extension not in DEFAULT_EXTENSIONS[kind]:
+    if (
+        (extension not in allowed and kind != "voice")
+        or extension not in DEFAULT_EXTENSIONS[kind]
+    ):
         raise HTTPException(415, "File extension is not allowed")
     if kind in MIME_PREFIX and not mime.lower().startswith(MIME_PREFIX[kind]):
         raise HTTPException(415, "MIME type does not match file type")
@@ -383,7 +388,7 @@ def verify_magic(path: Path, extension: str) -> bool:
     if not signatures:
         return True
     head = path.read_bytes()[:16]
-    if extension == "mp4":
+    if extension in {"mp4", "m4a"}:
         return any(x in head for x in signatures)
     if extension == "webp":
         return head.startswith(b"RIFF") and b"WEBP" in head

@@ -32,6 +32,7 @@ class VaultConnectState {
     this.conversationCursor,
     this.messageCursors = const {},
     this.typingConversations = const {},
+    this.onlineConversations = const {},
     this.uploadProgress = const {},
   });
   final List<ConnectConversation> conversations;
@@ -42,6 +43,7 @@ class VaultConnectState {
   final String? conversationCursor;
   final Map<String, String?> messageCursors;
   final Set<String> typingConversations;
+  final Set<String> onlineConversations;
   final Map<String, double> uploadProgress;
 
   VaultConnectState copyWith({
@@ -53,6 +55,7 @@ class VaultConnectState {
     String? conversationCursor,
     Map<String, String?>? messageCursors,
     Set<String>? typingConversations,
+    Set<String>? onlineConversations,
     Map<String, double>? uploadProgress,
   }) => VaultConnectState(
     conversations: conversations ?? this.conversations,
@@ -63,6 +66,7 @@ class VaultConnectState {
     conversationCursor: conversationCursor ?? this.conversationCursor,
     messageCursors: messageCursors ?? this.messageCursors,
     typingConversations: typingConversations ?? this.typingConversations,
+    onlineConversations: onlineConversations ?? this.onlineConversations,
     uploadProgress: uploadProgress ?? this.uploadProgress,
   );
 }
@@ -77,6 +81,7 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
   final Ref _ref;
   final VaultConnectRepository _repository;
   StreamSubscription<Map<String, dynamic>>? _subscription;
+  String? _activeConversationId;
 
   Future<void> loadConversations({bool more = false}) async {
     if (state.isLoading || state.loadingMore) return;
@@ -119,6 +124,7 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
   }
 
   Future<void> openConversation(String id) async {
+    _activeConversationId = id;
     await VaultConnectSocket.instance.connect();
     VaultConnectSocket.instance.join(id);
     await loadMessages(id);
@@ -140,7 +146,10 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
     }
   }
 
-  void leaveConversation(String id) => VaultConnectSocket.instance.leave(id);
+  void leaveConversation(String id) {
+    if (_activeConversationId == id) _activeConversationId = null;
+    VaultConnectSocket.instance.leave(id);
+  }
 
   Future<void> loadMessages(String id, {bool more = false}) async {
     if (state.loadingMore) return;
@@ -491,7 +500,9 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
       (x) => x.senderUserId != userId && x.status != ConnectMessageStatus.read,
     )) {
       unawaited(_repository.delivered(item.id));
-      unawaited(_repository.read(item.id));
+      if (_activeConversationId == conversationId) {
+        unawaited(_repository.read(item.id));
+      }
     }
   }
 
@@ -526,6 +537,7 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
     if (event == 'message.created') {
       final message = ConnectMessage.fromJson(json);
       _prepend(message.conversationId, message);
+      unawaited(_acknowledge(message.conversationId, [message]));
     } else if (event == 'message.deleted') {
       final id = json['conversation_id']?.toString() ?? '';
       final values = (state.messages[id] ?? const <ConnectMessage>[])
@@ -558,6 +570,15 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
       final values = {...state.typingConversations};
       event == 'typing.started' ? values.add(id) : values.remove(id);
       state = state.copyWith(typingConversations: values);
+    } else if (event == 'user.online' || event == 'user.offline') {
+      final id = json['conversation_id']?.toString() ?? '';
+      final values = {...state.onlineConversations};
+      event == 'user.online' ? values.add(id) : values.remove(id);
+      state = state.copyWith(onlineConversations: values);
+      if (event == 'user.offline') {
+        final typing = {...state.typingConversations}..remove(id);
+        state = state.copyWith(typingConversations: typing);
+      }
     } else if (event == 'user.blocked') {
       unawaited(loadConversations());
     }

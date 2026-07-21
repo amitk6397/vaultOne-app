@@ -20,6 +20,7 @@ class MessageType(str, enum.Enum):
     image = "image"
     video = "video"
     document = "document"
+    voice = "voice"
     deleted = "deleted"
 
 

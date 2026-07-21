@@ -71,7 +71,10 @@ async def register(
     controller: UserAuthController = Depends(get_controller),
 ) -> DataResponse:
     user = await controller.register(payload)
-    return DataResponse(message="Registration successful", data=user)
+    return DataResponse(
+        message="OTP sent; registration is pending verification",
+        data=user,
+    )
 
 
 @router.post("/login", response_model=DataResponse)

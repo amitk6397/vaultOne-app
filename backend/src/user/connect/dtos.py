@@ -36,7 +36,7 @@ class DisappearingMessagesRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     client_message_id: str = Field(min_length=8, max_length=80)
     conversation_id: str
-    message_type: Literal["text", "image", "video", "document"] = "text"
+    message_type: Literal["text", "image", "video", "document", "voice"] = "text"
     content: str | None = Field(default=None, max_length=10000)
     reply_to_message_id: str | None = None
     attachment_ids: list[str] = Field(default_factory=list, max_length=10)
@@ -51,7 +51,7 @@ class InitUploadRequest(BaseModel):
     file_name: str = Field(min_length=1, max_length=255)
     mime_type: str = Field(min_length=3, max_length=160)
     file_size: int = Field(gt=0)
-    file_type: Literal["image", "video", "document"]
+    file_type: Literal["image", "video", "document", "voice"]
     checksum: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{64}$")
 
 

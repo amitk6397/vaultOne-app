@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.email import send_otp_email
@@ -9,7 +9,7 @@ from src.config.settings import settings
 from src.core.otp import generate_otp, otp_expiry_time
 from src.core.security import create_access_token, create_refresh_token, hash_password, verify_password
 from src.database.models import (
-    OnboardingSlide, OtpPurpose, OtpVerification, User,
+    OnboardingSlide, OtpPurpose, OtpVerification, PendingUserRegistration, User,
     UserAuthEvent, UserAuthEventType, UserTokenState,
 )
 from src.shared.dtos import MessageResponse, TokenResponse
@@ -33,33 +33,61 @@ class UserAuthService:
         self.db = db
 
     async def register(self, payload: RegisterRequest) -> RegisterResponse:
-        existing = await self.db.scalar(
-            select(User).where(or_(User.email == payload.email, User.phone == payload.phone))
+        email = payload.email.lower()
+        await self.db.execute(
+            delete(PendingUserRegistration).where(
+                PendingUserRegistration.expires_at < datetime.utcnow()
+            )
         )
-        if existing:
+        existing_users = (
+            await self.db.scalars(
+                select(User).where(or_(User.email == email, User.phone == payload.phone))
+            )
+        ).all()
+        if any(user.is_verified for user in existing_users):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email or phone number already exists",
             )
+        for existing in existing_users:
+            # Recover accounts created by the old flow before OTP verification.
+            await self.db.execute(
+                delete(OtpVerification).where(OtpVerification.user_id == existing.id)
+            )
+            await self.db.execute(
+                delete(UserAuthEvent).where(UserAuthEvent.user_id == existing.id)
+            )
+            await self.db.delete(existing)
+        await self.db.flush()
 
-        user = User(
+        # A retry replaces any abandoned pending attempt using this email/phone.
+        await self.db.execute(
+            delete(PendingUserRegistration).where(
+                or_(
+                    PendingUserRegistration.email == email,
+                    PendingUserRegistration.phone == payload.phone,
+                )
+            )
+        )
+        await self.db.execute(
+            delete(OtpVerification).where(
+                OtpVerification.identity == email,
+                OtpVerification.purpose == OtpPurpose.register,
+                OtpVerification.verified_at.is_(None),
+            )
+        )
+        pending = PendingUserRegistration(
             full_name=payload.full_name.strip(),
-            email=payload.email.lower(),
+            email=email,
             phone=payload.phone,
             password_hash=hash_password(payload.password),
+            expires_at=otp_expiry_time(),
         )
-        self.db.add(user)
+        self.db.add(pending)
         await self.db.flush()
-        self.db.add(UserAuthEvent(
-            user_id=user.id,
-            event_type=UserAuthEventType.register,
-            auth_method="password",
-        ))
-        otp = await self._create_otp(user.id, user.email, OtpPurpose.register, user.email)
+        otp = await self._create_otp(None, pending.email, OtpPurpose.register, pending.email)
         await self.db.commit()
-        await self.db.refresh(user)
         return RegisterResponse(
-            user=UserResponse.model_validate(user),
             otp=otp if settings.is_development else None,
         )
 
@@ -148,9 +176,48 @@ class UserAuthService:
 
         otp_record.verified_at = datetime.utcnow()
         user = await self.db.get(User, otp_record.user_id) if otp_record.user_id else None
-        if payload.purpose == OtpPurpose.register and otp_record.user_id:
+        if payload.purpose == OtpPurpose.register:
             if user:
+                # Compatibility for OTPs issued by the previous registration flow.
                 user.is_verified = True
+            else:
+                pending = await self.db.scalar(
+                    select(PendingUserRegistration).where(
+                        PendingUserRegistration.email == otp_identity
+                    )
+                )
+                if not pending or pending.expires_at < datetime.utcnow():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Registration expired; please register again",
+                    )
+                conflict = await self.db.scalar(
+                    select(User).where(
+                        or_(User.email == pending.email, User.phone == pending.phone)
+                    )
+                )
+                if conflict:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Email or phone number already exists",
+                    )
+                user = User(
+                    full_name=pending.full_name,
+                    email=pending.email,
+                    phone=pending.phone,
+                    password_hash=pending.password_hash,
+                    is_verified=True,
+                )
+                self.db.add(user)
+                await self.db.flush()
+                self.db.add(
+                    UserAuthEvent(
+                        user_id=user.id,
+                        event_type=UserAuthEventType.register,
+                        auth_method="password",
+                    )
+                )
+                await self.db.delete(pending)
         if payload.purpose == OtpPurpose.login and user:
             if not user.is_verified:
                 raise HTTPException(
@@ -195,6 +262,19 @@ class UserAuthService:
 
     async def resend_otp(self, payload: ResendOtpRequest) -> MessageResponse:
         user = await self._find_user_by_identity(payload.identity)
+        if payload.purpose == OtpPurpose.register and not user:
+            pending = await self.db.scalar(
+                select(PendingUserRegistration).where(
+                    PendingUserRegistration.email
+                    == self._normalize_identity(payload.identity)
+                )
+            )
+            if not pending or pending.expires_at < datetime.utcnow():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Registration expired; please register again",
+                )
+            pending.expires_at = otp_expiry_time()
         otp_identity = user.email if user else self._normalize_identity(payload.identity)
         otp = await self._create_otp(
             user.id if user else None,

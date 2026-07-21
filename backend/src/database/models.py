@@ -97,6 +97,22 @@ class User(Base):
     otps = relationship("OtpVerification", back_populates="user")
 
 
+class PendingUserRegistration(Base):
+    """Registration details held only until the email OTP is verified."""
+
+    __tablename__ = "pending_user_registrations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
 class UserAuthEvent(Base):
     __tablename__ = "user_auth_events"
 

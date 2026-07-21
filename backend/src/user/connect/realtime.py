@@ -110,6 +110,7 @@ async def vault_connect_socket(socket: WebSocket) -> None:
                     manager.joined[socket].add(conversation_id)
                     other_id = await other_participant(db, conversation_id, user_id)
                     if not await is_blocked(db, user_id, other_id):
+                        await manager.emit_user(user_id, "user.online" if manager.online(other_id) else "user.offline", {"conversation_id": conversation_id, "user_id": other_id})
                         await manager.emit_user(other_id, "user.online", {"conversation_id": conversation_id, "user_id": user_id})
                 elif event == "conversation.leave":
                     manager.joined[socket].discard(str(data.get("conversation_id", "")))
@@ -160,11 +161,12 @@ async def vault_connect_socket(socket: WebSocket) -> None:
     finally:
         conversations = set(manager.joined.get(socket, set()))
         await manager.disconnect(user_id, socket)
-        async with AsyncSessionLocal() as db:
-            for conversation_id in conversations:
-                try:
-                    other_id = await other_participant(db, conversation_id, user_id)
-                    if not await is_blocked(db, user_id, other_id):
-                        await manager.emit_user(other_id, "user.offline", {"conversation_id": conversation_id, "user_id": user_id})
-                except Exception:
-                    pass
+        if not manager.online(user_id):
+            async with AsyncSessionLocal() as db:
+                for conversation_id in conversations:
+                    try:
+                        other_id = await other_participant(db, conversation_id, user_id)
+                        if not await is_blocked(db, user_id, other_id):
+                            await manager.emit_user(other_id, "user.offline", {"conversation_id": conversation_id, "user_id": user_id})
+                    except Exception:
+                        pass

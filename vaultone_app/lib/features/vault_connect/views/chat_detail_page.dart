@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../constants/app_colors.dart';
@@ -39,6 +42,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   final scroll = ScrollController();
   Timer? typingTimer;
   int currentUserId = 0;
+  final AudioRecorder recorder = AudioRecorder();
+  bool isRecording = false;
 
   @override
   void initState() {
@@ -57,6 +62,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   @override
   void dispose() {
     typingTimer?.cancel();
+    unawaited(recorder.dispose());
     ref
         .read(vaultConnectProvider.notifier)
         .leaveConversation(widget.conversation.id);
@@ -100,7 +106,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
           subtitle: Text(
             state.typingConversations.contains(widget.conversation.id)
                 ? 'typing…'
-                : 'Private chat',
+                : state.onlineConversations.contains(widget.conversation.id)
+                ? 'online'
+                : 'offline',
             style: const TextStyle(fontSize: 12),
           ),
         ),
@@ -190,6 +198,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             _Composer(
               controller: composer,
               onChanged: (_) {
+                setState(() {});
                 ref
                     .read(vaultConnectProvider.notifier)
                     .typing(widget.conversation.id, true);
@@ -202,6 +211,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 );
               },
               onAttach: _attachments,
+              isRecording: isRecording,
+              onVoice: _toggleVoiceRecording,
               onSend: () {
                 final text = composer.text;
                 composer.clear();
@@ -316,6 +327,46 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       pathParameters: {'conversationId': widget.conversation.id},
       extra: picked,
     );
+  }
+
+  Future<void> _toggleVoiceRecording() async {
+    try {
+      if (isRecording) {
+        final recordedPath = await recorder.stop();
+        if (mounted) setState(() => isRecording = false);
+        if (recordedPath != null && recordedPath.isNotEmpty) {
+          final voiceFile = File(recordedPath);
+          await ref.read(vaultConnectProvider.notifier).sendFile(
+                widget.conversation.id,
+                voiceFile,
+                'voice',
+                'audio/mp4',
+              );
+          if (await voiceFile.exists()) await voiceFile.delete();
+        }
+        return;
+      }
+      if (!await recorder.hasPermission()) {
+        throw StateError('Microphone permission is required.');
+      }
+      final directory = await getTemporaryDirectory();
+      final path = p.join(
+        directory.path,
+        'voice_${DateTime.now().microsecondsSinceEpoch}.m4a',
+      );
+      await recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
+      if (mounted) setState(() => isRecording = true);
+    } catch (error) {
+      if (mounted) {
+        setState(() => isRecording = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
   }
 
   Future<void> _delete(ConnectMessage message) async {
@@ -461,7 +512,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to download this secure file. Please try again.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -476,11 +533,15 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onAttach,
     required this.onChanged,
+    required this.onVoice,
+    required this.isRecording,
   });
   final TextEditingController controller;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final ValueChanged<String> onChanged;
+  final VoidCallback onVoice;
+  final bool isRecording;
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -507,8 +568,14 @@ class _Composer extends StatelessWidget {
             ),
           ),
           IconButton.filled(
-            onPressed: onSend,
-            icon: const Icon(Icons.send_rounded),
+            onPressed: controller.text.trim().isEmpty ? onVoice : onSend,
+            icon: Icon(
+              controller.text.trim().isEmpty
+                  ? isRecording
+                        ? Icons.stop_rounded
+                        : Icons.mic_rounded
+                  : Icons.send_rounded,
+            ),
           ),
         ],
       ),
@@ -633,6 +700,8 @@ class _MessageBubble extends StatelessWidget {
                                 ? Icons.image
                                 : attachment.fileType == 'video'
                                 ? Icons.movie
+                                : attachment.fileType == 'voice'
+                                ? Icons.mic_rounded
                                 : Icons.description,
                             color: mine ? Colors.white : AppColors.purple,
                           ),
