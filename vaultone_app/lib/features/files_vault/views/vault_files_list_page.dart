@@ -67,15 +67,22 @@ class _VaultFilesListPageState extends ConsumerState<VaultFilesListPage> {
             ),
             actions: [
               if (_selectedIds.isNotEmpty)
-                IconButton(
-                  tooltip: 'Move or copy',
-                  onPressed: () =>
-                      _moveOrCopy(context, controller, state.folders),
-                  icon: Badge(
-                    label: Text('${_selectedIds.length}'),
-                    child: const Icon(Icons.drive_file_move_rounded),
+                ...[
+                  IconButton(
+                    tooltip: 'Delete selected',
+                    onPressed: () => _deleteSelected(context, controller),
+                    icon: const Icon(Icons.delete_outline_rounded),
                   ),
-                )
+                  IconButton(
+                    tooltip: 'Move or copy',
+                    onPressed: () =>
+                        _moveOrCopy(context, controller, state.folders),
+                    icon: Badge(
+                      label: Text('${_selectedIds.length}'),
+                      child: const Icon(Icons.drive_file_move_rounded),
+                    ),
+                  ),
+                ]
               else
                 IconButton(
                   tooltip: 'Create new folder',
@@ -373,6 +380,35 @@ class _VaultFilesListPageState extends ConsumerState<VaultFilesListPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _deleteSelected(
+    BuildContext context,
+    FilesVaultController controller,
+  ) async {
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete $count selected file${count == 1 ? '' : 's'}?'),
+        content: const Text('The selected files will be permanently deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    for (final id in _selectedIds.toList()) {
+      await controller.deleteFile(id);
+    }
+    if (mounted) setState(_selectedIds.clear);
   }
 
   List<VaultFile> _filtered(BuildContext context, List<VaultFile> files) {

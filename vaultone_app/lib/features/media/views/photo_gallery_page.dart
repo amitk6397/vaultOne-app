@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../routes/app_routes.dart';
+import '../../../core/storage/module_storage_controller.dart';
+import '../../../shared/widgets/module_storage_sheet.dart';
 import '../../../shared/widgets/local_auth_gate.dart';
 import '../models/media_item.dart';
 import '../providers/media_provider.dart';
@@ -36,6 +38,14 @@ class PhotoGalleryPage extends ConsumerStatefulWidget {
 
 class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => ref.read(mediaLibraryProvider.notifier).loadPrivatePhotos(),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = ref.watch(mediaLibraryProvider);
     final controller = ref.read(mediaLibraryProvider.notifier);
@@ -47,16 +57,18 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
     return MediaPageShell.slivers(
       title: context.l10n.tr('private_photos'),
       subtitle: context.l10n.tr(
-        'private_photos_count',
-        args: {
-          'current': controller.privatePhotoCount,
-          'limit': MediaLibraryController.privatePhotoLimit,
-        },
+        'photo_count',
+        args: {'count': controller.privatePhotoCount},
       ),
       icon: Icons.lock_rounded,
       compactHeader: true,
       actions: [
-        if (state.selectedIds.isNotEmpty)
+        if (state.selectedIds.isNotEmpty) ...[
+          IconButton(
+            tooltip: 'Delete selected',
+            onPressed: () => _deleteSelected(context, controller),
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
           IconButton(
             tooltip: 'Move or copy',
             onPressed: () =>
@@ -65,8 +77,8 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
               label: Text('${state.selectedIds.length}'),
               child: const Icon(Icons.drive_file_move_rounded),
             ),
-          )
-        else
+          ),
+        ] else
           IconButton(
             tooltip: 'Create new folder',
             onPressed: () => createMediaFolder(context, ref, MediaKind.photo),
@@ -74,8 +86,20 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
           ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert_rounded),
-          onSelected: (_) => context.pushNamed(AppRoutes.mediaSecurityName),
+          onSelected: (value) async {
+            if (value == 'storage') {
+              await chooseModuleStorage(
+                context,
+                ref,
+                StorageModule.photos,
+                force: true,
+              );
+            } else {
+              context.pushNamed(AppRoutes.mediaSecurityName);
+            }
+          },
           itemBuilder: (_) => const [
+            PopupMenuItem(value: 'storage', child: Text('Change storage')),
             PopupMenuItem(value: 'security', child: Text('Security')),
           ],
         ),
@@ -85,7 +109,6 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
           child: PrivateMediaVaultOverview(
             kind: MediaKind.photo,
             count: controller.privatePhotoCount,
-            limit: MediaLibraryController.privatePhotoLimit,
             onAdd: () => importMedia(context, ref, MediaKind.photo),
           ),
         ),
@@ -123,6 +146,30 @@ class _PhotoGalleryPageState extends ConsumerState<PhotoGalleryPage> {
           ),
       ],
     );
+  }
+
+  Future<void> _deleteSelected(
+    BuildContext context,
+    MediaLibraryController controller,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete selected photos?'),
+        content: const Text('Selected photos will be removed from VaultOne.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) controller.deleteSelected(MediaKind.photo);
   }
 }
 

@@ -69,6 +69,12 @@ class UserAuthEventType(str, enum.Enum):
     logout = "logout"
 
 
+class AccountDeletionStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -95,6 +101,28 @@ class User(Base):
     )
 
     otps = relationship("OtpVerification", back_populates="user")
+
+
+class AccountDeletionRequest(Base):
+    __tablename__ = "account_deletion_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    user_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    user_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    reason_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[AccountDeletionStatus] = mapped_column(
+        Enum(AccountDeletionStatus), default=AccountDeletionStatus.pending,
+        index=True, nullable=False,
+    )
+    admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True, nullable=False
+    )
 
 
 class PendingUserRegistration(Base):

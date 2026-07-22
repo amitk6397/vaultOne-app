@@ -149,6 +149,7 @@ class ConnectConversation {
     this.isBlocked = false,
     this.blockedByMe = false,
     this.isMuted = false,
+    this.unreadCount = 0,
   });
   final String id;
   final ConnectUser participant;
@@ -159,6 +160,7 @@ class ConnectConversation {
   final bool isBlocked;
   final bool blockedByMe;
   final bool isMuted;
+  final int unreadCount;
 
   ConnectConversation copyWith({bool? isBlocked, bool? blockedByMe}) =>
       ConnectConversation(
@@ -171,6 +173,7 @@ class ConnectConversation {
         isBlocked: isBlocked ?? this.isBlocked,
         blockedByMe: blockedByMe ?? this.blockedByMe,
         isMuted: isMuted,
+        unreadCount: unreadCount,
       );
 
   factory ConnectConversation.fromJson(Map<String, dynamic> json) =>
@@ -197,5 +200,6 @@ class ConnectConversation {
         isBlocked: json['is_blocked'] == true,
         blockedByMe: json['blocked_by_me'] == true,
         isMuted: json['is_muted'] == true,
+        unreadCount: (json['unread_count'] as num?)?.toInt() ?? 0,
       );
 }

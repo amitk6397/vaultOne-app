@@ -36,6 +36,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       final controller = ref.read(mediaLibraryProvider.notifier);
       await controller.loadVideoStorage();
       await controller.loadPrivateVideos();
+      await controller.loadPrivatePhotos();
     });
   }
 
@@ -47,7 +48,12 @@ class _HomePageState extends ConsumerState<HomePage> {
     final media = ref.watch(mediaLibraryProvider);
     final customization = ref.watch(homeCustomizationProvider);
     final photoCount = media.items
-        .where((item) => item.kind == MediaKind.photo && !item.isDeleted)
+        .where(
+          (item) =>
+              item.kind == MediaKind.photo &&
+              item.visibility == MediaVisibility.private &&
+              !item.isDeleted,
+        )
         .length;
     final videoCount = media.items
         .where(
@@ -64,7 +70,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         'Vault Connect',
         'Private chat & secure sharing',
         Icons.forum_rounded,
-        AppImages.moduleFileVault,
+        AppImages.moduleChat,
         customization.colorFor(
           HomeModuleId.connect,
           _moduleColor(HomeModuleId.connect),
@@ -163,7 +169,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           child: RefreshIndicator(
             color: AppColors.purple,
             onRefresh: () async {
-              await ref.read(mediaLibraryProvider.notifier).loadPrivateVideos();
+              final controller = ref.read(mediaLibraryProvider.notifier);
+              await controller.loadPrivateVideos();
+              await controller.loadPrivatePhotos();
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
@@ -859,10 +867,7 @@ class _CommandDeckCard extends StatelessWidget {
 }
 
 class _ModuleIconBox extends StatelessWidget {
-  const _ModuleIconBox({
-    required this.item,
-    required this.size,
-  });
+  const _ModuleIconBox({required this.item, required this.size});
 
   final _QuickItem item;
   final double size;
@@ -907,9 +912,7 @@ class _BannerGlassPlaceholder extends StatelessWidget {
             colors.surface.withValues(alpha: .58),
           ],
         ),
-        border: Border.all(
-          color: colors.onSurface.withValues(alpha: .08),
-        ),
+        border: Border.all(color: colors.onSurface.withValues(alpha: .08)),
         boxShadow: [
           BoxShadow(
             color: AppColors.purple.withValues(alpha: .08),
@@ -976,10 +979,7 @@ class _GlassOrb extends StatelessWidget {
 }
 
 class _ModuleAssetImage extends StatelessWidget {
-  const _ModuleAssetImage({
-    required this.asset,
-    required this.borderRadius,
-  });
+  const _ModuleAssetImage({required this.asset, required this.borderRadius});
 
   final String asset;
   final double borderRadius;

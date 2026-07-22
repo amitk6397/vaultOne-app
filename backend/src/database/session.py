@@ -57,6 +57,18 @@ async def init_db() -> None:
                             "ADD COLUMN storage_limit_bytes BIGINT NULL"
                         )
                     )
+            if "messages" in tables:
+                message_columns = await connection.run_sync(
+                    lambda sync_connection: {
+                        column["name"]: str(column["type"]).lower()
+                        for column in inspect(sync_connection).get_columns("messages")
+                    }
+                )
+                if "voice" not in message_columns.get("message_type", ""):
+                    await connection.execute(text(
+                        "ALTER TABLE messages MODIFY COLUMN message_type "
+                        "ENUM('text','image','video','document','voice','deleted') NOT NULL"
+                    ))
             await connection.run_sync(Base.metadata.create_all)
     except OperationalError as error:
         raise RuntimeError(

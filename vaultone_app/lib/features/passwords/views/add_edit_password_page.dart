@@ -60,7 +60,7 @@ class _AddEditPasswordPageState extends ConsumerState<AddEditPasswordPage> {
           existing == null ? 'add_password' : 'edit_password',
         ),
         subtitle: context.l10n.tr('stored_locally_hive'),
-        onBack: () => context.goNamed(AppRoutes.passwordsName),
+        onBack: _returnToPasswords,
         actions: [
           IconButton(
             tooltip: context.l10n.tr('scan_login_ai'),
@@ -155,7 +155,7 @@ class _AddEditPasswordPageState extends ConsumerState<AddEditPasswordPage> {
                           context,
                           message: context.l10n.tr('password_saved_local'),
                         );
-                        context.goNamed(AppRoutes.passwordsName);
+                        _returnToPasswords();
                       },
               ),
             ],
@@ -241,9 +241,17 @@ class _AddEditPasswordPageState extends ConsumerState<AddEditPasswordPage> {
         context,
         message: context.l10n.tr('ai_password_saved'),
       );
-      context.goNamed(AppRoutes.passwordsName);
+      _returnToPasswords();
     } catch (error) {
       if (mounted) AppFeedback.showSnackBar(context, message: error.toString());
+    }
+  }
+
+  void _returnToPasswords() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.goNamed(AppRoutes.passwordsName);
     }
   }
 }

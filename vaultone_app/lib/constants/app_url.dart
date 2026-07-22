@@ -16,6 +16,8 @@ class AppUrl {
   static const banners = '${baseUrl}user/banners';
   static const userProfile = '${baseUrl}user/profile/me';
   static const userData = '${baseUrl}user/profile/data';
+  static const accountDeletionRequest =
+      '${baseUrl}user/profile/deletion-request';
   static const userFiles = '${baseUrl}user/files';
   static const userMedia = '${baseUrl}user/media';
   static const userDocuments = '${baseUrl}user/documents';
@@ -75,13 +77,13 @@ class AppUrl {
       '$connectAttachments/$id/download-url';
   static String connectBlockUser(int id) => '$connectUsers/$id/block';
 
-  static Uri connectSocketUri(String accessToken) {
+  static String get connectSocketOrigin {
     final api = Uri.parse(baseUrl);
-    return api.replace(
-      scheme: api.scheme == 'https' ? 'wss' : 'ws',
-      path: '/api/v1/ws/vault-connect',
-      queryParameters: {'token': accessToken},
-    );
+    return Uri(
+      scheme: api.scheme,
+      host: api.host,
+      port: api.hasPort ? api.port : null,
+    ).toString();
   }
 
   static bool isRemoteUrl(String? value) {

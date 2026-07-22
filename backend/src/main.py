@@ -14,6 +14,8 @@ from src.core.notifications import initialize_firebase
 from src.shared.dtos import DataResponse
 from src.user.routes import router as user_router
 from src.user.connect.cleanup import cleanup_loop
+from src.user.connect.realtime import sio
+import socketio
 
 logger = logging.getLogger(__name__)
 
@@ -80,4 +82,5 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+fastapi_app = create_app()
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app, socketio_path="socket.io")

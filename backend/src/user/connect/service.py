@@ -157,6 +157,18 @@ async def conversation_data(db: AsyncSession, conversation: Conversation, viewer
     other = await db.get(User, other_id)
     last = await db.get(Message, conversation.last_message_id) if conversation.last_message_id else None
     last_data = await message_data(db, last, viewer_id) if last else None
+    unread_query = select(func.count(MessageReceipt.message_id)).join(
+        Message, Message.id == MessageReceipt.message_id
+    ).where(
+        MessageReceipt.user_id == viewer_id,
+        MessageReceipt.read_at.is_(None),
+        Message.conversation_id == conversation.id,
+        Message.sender_user_id != viewer_id,
+        Message.deleted_at.is_(None),
+    )
+    if member.cleared_before:
+        unread_query = unread_query.where(Message.created_at > member.cleared_before)
+    unread_count = int(await db.scalar(unread_query) or 0)
     return {
         "id": conversation.id, "type": conversation.type.value,
         "participant": user_data(other) if other else {"id": other_id},
@@ -166,7 +178,25 @@ async def conversation_data(db: AsyncSession, conversation: Conversation, viewer
         "cleared_before": member.cleared_before, "created_at": conversation.created_at,
         "is_blocked": await is_blocked(db, viewer_id, other_id),
         "blocked_by_me": await blocked_by(db, viewer_id, other_id),
+        "unread_count": unread_count,
     }
+
+
+async def unread_message_count(
+    db: AsyncSession, conversation_id: str, user_id: int
+) -> int:
+    """Return authoritative unread messages for push-notification deduping."""
+    return int(await db.scalar(
+        select(func.count(MessageReceipt.message_id)).join(
+            Message, Message.id == MessageReceipt.message_id
+        ).where(
+            MessageReceipt.user_id == user_id,
+            MessageReceipt.read_at.is_(None),
+            Message.conversation_id == conversation_id,
+            Message.sender_user_id != user_id,
+            Message.deleted_at.is_(None),
+        )
+    ) or 0)
 
 
 async def discover_contacts(db: AsyncSession, user_id: int, phones: list[str]) -> list[dict]:

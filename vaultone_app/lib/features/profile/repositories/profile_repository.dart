@@ -67,4 +67,14 @@ class ProfileRepository {
   Future<void> logout() async {
     await _api.post(AppUrl.userLogout);
   }
+
+  Future<void> requestAccountDeletion({
+    required String reasonCode,
+    String? reasonText,
+  }) async {
+    await _api.post(
+      AppUrl.accountDeletionRequest,
+      data: {'reason_code': reasonCode, 'reason_text': reasonText},
+    );
+  }
 }

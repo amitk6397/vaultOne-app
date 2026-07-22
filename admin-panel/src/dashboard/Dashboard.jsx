@@ -12,11 +12,13 @@ import { StorageAnalytics } from '../analytics/StorageAnalytics'
 import { NotificationsManager } from '../notifications/NotificationsManager'
 import { SupportManager } from '../support/SupportManager'
 import { VaultConnectManager } from '../vaultConnect/VaultConnectManager'
+import { AccountDeletionManager } from '../users/AccountDeletionManager'
 
 export function Dashboard({ activeView, onNavigate }) {
   const [slides, setSlides] = useState([])
   const [policies, setPolicies] = useState([])
   const [users, setUsers] = useState([])
+  const [deletionRequests, setDeletionRequests] = useState([])
   const [banners, setBanners] = useState([])
   const [plans, setPlans] = useState([])
   const [orders, setOrders] = useState([])
@@ -32,10 +34,11 @@ export function Dashboard({ activeView, onNavigate }) {
     setError('')
     setLoading(true)
     try {
-      const [slideResponse, policyResponse, usersResponse, bannersResponse, plansResponse, ordersResponse, settingsResponse, historyResponse, analyticsResponse, notificationsResponse] = await Promise.all([
+      const [slideResponse, policyResponse, usersResponse, deletionResponse, bannersResponse, plansResponse, ordersResponse, settingsResponse, historyResponse, analyticsResponse, notificationsResponse] = await Promise.all([
         adminApi.listOnboarding(),
         adminApi.listPolicies(),
         adminApi.listUsers(),
+        adminApi.listDeletionRequests(),
         adminApi.listBanners(),
         adminApi.listPlans(),
         adminApi.listPayments(),
@@ -47,6 +50,7 @@ export function Dashboard({ activeView, onNavigate }) {
       setSlides(slideResponse.data || [])
       setPolicies(policyResponse.data || [])
       setUsers(usersResponse.data || [])
+      setDeletionRequests(deletionResponse.data || [])
       setBanners(bannersResponse.data || [])
       setPlans(plansResponse.data || [])
       setOrders(ordersResponse.data || [])
@@ -101,6 +105,13 @@ export function Dashboard({ activeView, onNavigate }) {
       )}
       {activeView === 'users' && (
         <UsersManager users={users} loading={loading} onChanged={loadData} />
+      )}
+      {activeView === 'deletion-requests' && (
+        <AccountDeletionManager
+          requests={deletionRequests}
+          loading={loading}
+          onChanged={loadData}
+        />
       )}
       {activeView === 'banners' && (
         <BannersManager banners={banners} loading={loading} onChanged={loadData} />

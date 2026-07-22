@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.cloudinary_config import delete_from_cloudinary, public_id_from_url
 from src.database.models import (
+    AccountDeletionRequest,
+    AccountDeletionStatus,
     MediaKind,
     User,
     UserDigiDocument,
@@ -14,7 +16,7 @@ from src.database.models import (
 )
 from src.shared.dtos import DataResponse
 from src.user.auth.dtos import UserResponse
-from src.user.profile.dtos import UserProfileUpdate
+from src.user.profile.dtos import AccountDeletionRequestCreate, UserProfileUpdate
 
 
 class UserProfileController:
@@ -114,4 +116,39 @@ class UserProfileController:
         return DataResponse(
             message=f"{section.title()} data deleted successfully",
             data={"section": section, "deleted_count": deleted},
+        )
+
+    async def request_account_deletion(
+        self, payload: AccountDeletionRequestCreate, current_user: User
+    ) -> DataResponse:
+        allowed = {
+            "privacy", "not_using", "too_expensive", "technical_issues",
+            "switching_service", "other",
+        }
+        if payload.reason_code not in allowed:
+            raise HTTPException(status_code=422, detail="Invalid deletion reason")
+        reason_text = (payload.reason_text or "").strip()
+        if payload.reason_code == "other" and len(reason_text) < 3:
+            raise HTTPException(status_code=422, detail="Please enter a reason")
+        item = await self.db.scalar(select(AccountDeletionRequest).where(
+            AccountDeletionRequest.user_id == current_user.id,
+            AccountDeletionRequest.status == AccountDeletionStatus.pending,
+        ))
+        if item is None:
+            item = AccountDeletionRequest(
+                user_id=current_user.id,
+                user_name=current_user.full_name,
+                user_email=current_user.email,
+                reason_code=payload.reason_code,
+                reason_text=reason_text or None,
+            )
+            self.db.add(item)
+        else:
+            item.reason_code = payload.reason_code
+            item.reason_text = reason_text or None
+        await self.db.commit()
+        await self.db.refresh(item)
+        return DataResponse(
+            message="Account deletion request submitted for admin review",
+            data={"id": item.id, "status": item.status.value},
         )

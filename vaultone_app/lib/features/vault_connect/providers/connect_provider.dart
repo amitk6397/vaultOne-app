@@ -227,6 +227,7 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
         File(localAttachment.localPath!),
         localAttachment.fileType,
         localAttachment.mimeType,
+        content: message.content,
       );
       return;
     }
@@ -257,8 +258,9 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
     String conversationId,
     File file,
     String kind,
-    String mime,
-  ) async {
+    String mime, {
+    String? content,
+  }) async {
     final key = file.path;
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getInt('user_id') ?? 0;
@@ -279,6 +281,7 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
       conversationId: conversationId,
       senderUserId: userId,
       messageType: kind,
+      content: content,
       createdAt: DateTime.now(),
       attachments: [pendingAttachment],
       status: ConnectMessageStatus.uploading,
@@ -309,6 +312,7 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
         conversationId: conversationId,
         clientMessageId: clientId,
         messageType: kind,
+        content: content,
         attachmentIds: [attachment.id],
       );
       _replaceClient(conversationId, clientId, message);
@@ -538,6 +542,14 @@ class VaultConnectController extends StateNotifier<VaultConnectState> {
       final message = ConnectMessage.fromJson(json);
       _prepend(message.conversationId, message);
       unawaited(_acknowledge(message.conversationId, [message]));
+    } else if (event == 'conversation.updated') {
+      final conversation = ConnectConversation.fromJson(json);
+      state = state.copyWith(
+        conversations: [
+          conversation,
+          ...state.conversations.where((item) => item.id != conversation.id),
+        ],
+      );
     } else if (event == 'message.deleted') {
       final id = json['conversation_id']?.toString() ?? '';
       final values = (state.messages[id] ?? const <ConnectMessage>[])

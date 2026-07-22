@@ -17,6 +17,16 @@ class MediaRepository {
 
   final BaseApiService _api;
 
+  Future<List<Map<String, dynamic>>> fetchMedia() async {
+    final response = await _api.get(AppUrl.userMedia);
+    final data = response is Map ? response['data'] : null;
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<void> syncMedia(MediaItem item) async {
     final filePath = item.path;
     final file = filePath == null ? null : File(filePath);

@@ -289,13 +289,12 @@ class ProfilePage extends ConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Backup failed, so logout was cancelled to protect your data: '
+                'Backup could not finish, but logout will continue: '
                 '$error',
               ),
             ),
           );
         }
-        return;
       }
     }
     final cleanupErrors = <Object>[];

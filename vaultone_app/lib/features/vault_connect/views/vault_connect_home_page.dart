@@ -159,7 +159,12 @@ class _VaultConnectHomePageState extends ConsumerState<VaultConnectHomePage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: item.disappearingSeconds > 0
+                  trailing: item.unreadCount > 0
+                      ? Badge(
+                          label: Text(item.unreadCount > 99 ? '99+' : '${item.unreadCount}'),
+                          backgroundColor: AppColors.purple,
+                        )
+                      : item.disappearingSeconds > 0
                       ? const Icon(Icons.timer_outlined, size: 18)
                       : null,
                   onTap: () => context.pushNamed(

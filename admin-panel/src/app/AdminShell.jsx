@@ -11,11 +11,13 @@ import {
   BellRing,
   MessagesSquare,
   MessageSquareLock,
+  UserRoundX,
 } from 'lucide-react'
 
 const navItems = [
   { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
   { id: 'users', label: 'Users', icon: Users },
+  { id: 'deletion-requests', label: 'Deletion requests', icon: UserRoundX },
   { id: 'banners', label: 'Banners', icon: Images },
   { id: 'onboarding', label: 'Onboarding', icon: ImagePlus },
   { id: 'policies', label: 'Policies', icon: BookOpen },

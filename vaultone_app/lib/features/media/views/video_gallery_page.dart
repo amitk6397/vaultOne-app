@@ -65,7 +65,12 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
       icon: Icons.video_library_rounded,
       compactHeader: true,
       actions: [
-        if (state.selectedIds.isNotEmpty)
+        if (state.selectedIds.isNotEmpty) ...[
+          IconButton(
+            tooltip: 'Delete selected',
+            onPressed: () => _deleteSelected(context, controller),
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
           IconButton(
             tooltip: 'Move or copy',
             onPressed: () =>
@@ -74,8 +79,8 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
               label: Text('${state.selectedIds.length}'),
               child: const Icon(Icons.drive_file_move_rounded),
             ),
-          )
-        else
+          ),
+        ] else
           IconButton(
             tooltip: 'Create new folder',
             onPressed: () => createMediaFolder(context, ref, MediaKind.video),
@@ -174,6 +179,30 @@ class _VideoGalleryPageState extends ConsumerState<VideoGalleryPage> {
           ? context.l10n.tr('video_added_private')
           : context.l10n.tr(error),
     );
+  }
+
+  Future<void> _deleteSelected(
+    BuildContext context,
+    MediaLibraryController controller,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete selected videos?'),
+        content: const Text('Selected videos will be removed from VaultOne.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) controller.deleteSelected(MediaKind.video);
   }
 
   Future<VideoStorage?> _chooseStorage({bool change = false}) async {

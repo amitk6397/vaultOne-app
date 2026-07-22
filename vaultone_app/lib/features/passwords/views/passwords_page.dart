@@ -15,8 +15,15 @@ import '../providers/password_vault_provider.dart';
 import '../password_localizations.dart';
 import '../widgets/password_vault_card.dart';
 
-class PasswordsPage extends ConsumerWidget {
+class PasswordsPage extends ConsumerStatefulWidget {
   const PasswordsPage({super.key});
+
+  @override
+  ConsumerState<PasswordsPage> createState() => _PasswordsPageState();
+}
+
+class _PasswordsPageState extends ConsumerState<PasswordsPage> {
+  final Set<String> _selectedIds = {};
 
   static const _categories = [
     'All',
@@ -30,7 +37,7 @@ class PasswordsPage extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final vault = ref.watch(passwordVaultProvider);
     final controller = ref.read(passwordVaultProvider.notifier);
@@ -43,11 +50,27 @@ class PasswordsPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppPageAppBar(
-        title: context.l10n.tr('password_store'),
+        title: _selectedIds.isEmpty
+            ? context.l10n.tr('password_store')
+            : '${_selectedIds.length} selected',
         subtitle: context.l10n.tr('password_store_subtitle'),
         onBack: () => context.canPop()
             ? context.pop()
             : context.goNamed(AppRoutes.homeName),
+        actions: _selectedIds.isEmpty
+            ? const []
+            : [
+                IconButton(
+                  tooltip: 'Delete selected',
+                  onPressed: () => _deleteSelected(context, controller),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Clear selection',
+                  onPressed: () => setState(_selectedIds.clear),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
       ),
       bottomNavigationBar: const AppBottomNav(activeTab: AppNavTab.passwords),
       floatingActionButton: FloatingActionButton(
@@ -151,6 +174,13 @@ class PasswordsPage extends ConsumerWidget {
                     final entry = entries[index];
                     return PasswordVaultCard(
                       entry: entry,
+                      selected: _selectedIds.contains(entry.id),
+                      selectionMode: _selectedIds.isNotEmpty,
+                      onSelect: () => setState(() {
+                        _selectedIds.contains(entry.id)
+                            ? _selectedIds.remove(entry.id)
+                            : _selectedIds.add(entry.id);
+                      }),
                       onEdit: () => context.pushNamed(
                         AppRoutes.addEditPasswordName,
                         queryParameters: {'id': entry.id},
@@ -206,6 +236,29 @@ class PasswordsPage extends ConsumerWidget {
       context,
       message: context.l10n.tr('password_deleted'),
     );
+  }
+
+  Future<void> _deleteSelected(
+    BuildContext context,
+    PasswordVaultController controller,
+  ) async {
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete $count selected password${count == 1 ? '' : 's'}?'),
+        content: const Text('The selected passwords will be permanently deleted.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    for (final id in _selectedIds.toList()) {
+      await controller.deleteEntry(id);
+    }
+    if (mounted) setState(_selectedIds.clear);
   }
 }
 

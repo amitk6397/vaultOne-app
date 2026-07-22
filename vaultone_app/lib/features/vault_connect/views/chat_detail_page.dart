@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,16 +45,22 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   int currentUserId = 0;
   final AudioRecorder recorder = AudioRecorder();
   bool isRecording = false;
+  final Stopwatch _recordingClock = Stopwatch();
+  Timer? _recordingTicker;
+  late final VaultConnectController _connectController;
 
   @override
   void initState() {
     super.initState();
+    // Capture this while the Consumer element is alive. Calling ref.read from
+    // dispose causes Riverpod's defunct-element assertion and previously left
+    // a closed chat marked as the active/read conversation.
+    _connectController = ref.read(vaultConnectProvider.notifier);
     Future.microtask(() async {
       currentUserId =
           (await SharedPreferences.getInstance()).getInt('user_id') ?? 0;
-      await ref
-          .read(vaultConnectProvider.notifier)
-          .openConversation(widget.conversation.id);
+      if (!mounted) return;
+      await _connectController.openConversation(widget.conversation.id);
       if (mounted) setState(() {});
     });
     scroll.addListener(_paginate);
@@ -62,10 +69,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   @override
   void dispose() {
     typingTimer?.cancel();
+    _recordingTicker?.cancel();
     unawaited(recorder.dispose());
-    ref
-        .read(vaultConnectProvider.notifier)
-        .leaveConversation(widget.conversation.id);
+    _connectController.leaveConversation(widget.conversation.id);
     composer.dispose();
     scroll.dispose();
     super.dispose();
@@ -176,6 +182,9 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                                 .retry(message),
                             onDelete: () => _delete(message),
                             onAttachment: _attachmentActions,
+                            onDownload: (item) => ref
+                                .read(vaultConnectProvider.notifier)
+                                .download(item),
                           ),
                         ],
                       );
@@ -212,6 +221,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
               },
               onAttach: _attachments,
               isRecording: isRecording,
+              recordingDuration: _recordingClock.elapsed,
               onVoice: _toggleVoiceRecording,
               onSend: () {
                 final text = composer.text;
@@ -332,6 +342,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   Future<void> _toggleVoiceRecording() async {
     try {
       if (isRecording) {
+        _recordingClock.stop();
+        _recordingTicker?.cancel();
         final recordedPath = await recorder.stop();
         if (mounted) setState(() => isRecording = false);
         if (recordedPath != null && recordedPath.isNotEmpty) {
@@ -341,6 +353,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                 voiceFile,
                 'voice',
                 'audio/mp4',
+                content: '${_recordingClock.elapsedMilliseconds}',
               );
           if (await voiceFile.exists()) await voiceFile.delete();
         }
@@ -358,8 +371,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
         const RecordConfig(encoder: AudioEncoder.aacLc),
         path: path,
       );
+      _recordingClock
+        ..reset()
+        ..start();
+      _recordingTicker?.cancel();
+      _recordingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
       if (mounted) setState(() => isRecording = true);
     } catch (error) {
+      _recordingClock.stop();
+      _recordingTicker?.cancel();
       if (mounted) {
         setState(() => isRecording = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -535,6 +557,7 @@ class _Composer extends StatelessWidget {
     required this.onChanged,
     required this.onVoice,
     required this.isRecording,
+    required this.recordingDuration,
   });
   final TextEditingController controller;
   final VoidCallback onSend;
@@ -542,6 +565,7 @@ class _Composer extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onVoice;
   final bool isRecording;
+  final Duration recordingDuration;
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -554,7 +578,20 @@ class _Composer extends StatelessWidget {
             icon: const Icon(Icons.add_circle_outline),
           ),
           Expanded(
-            child: TextField(
+            child: isRecording
+                ? Row(
+                    children: [
+                      const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${recordingDuration.inMinutes.toString().padLeft(2, '0')}:${recordingDuration.inSeconds.remainder(60).toString().padLeft(2, '0')}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(child: LinearProgressIndicator()),
+                    ],
+                  )
+                : TextField(
               controller: controller,
               onChanged: onChanged,
               minLines: 1,
@@ -565,7 +602,7 @@ class _Composer extends StatelessWidget {
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
-            ),
+                  ),
           ),
           IconButton.filled(
             onPressed: controller.text.trim().isEmpty ? onVoice : onSend,
@@ -631,12 +668,14 @@ class _MessageBubble extends StatelessWidget {
     required this.onRetry,
     required this.onDelete,
     required this.onAttachment,
+    required this.onDownload,
   });
   final ConnectMessage message;
   final bool mine;
   final VoidCallback onRetry;
   final VoidCallback onDelete;
   final ValueChanged<ConnectAttachment> onAttachment;
+  final Future<String> Function(ConnectAttachment) onDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -676,7 +715,8 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 )
               else ...[
-                if (message.content?.isNotEmpty == true)
+                if (message.content?.isNotEmpty == true &&
+                    !message.attachments.any((item) => item.fileType == 'voice'))
                   Text(
                     message.content!,
                     style: TextStyle(
@@ -685,6 +725,15 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   ),
                 for (final attachment in message.attachments)
+                  if (attachment.fileType == 'voice')
+                    _VoiceMessage(
+                      attachment: attachment,
+                      durationMilliseconds:
+                          int.tryParse(message.content ?? '') ?? 0,
+                      mine: mine,
+                      onDownload: onDownload,
+                    )
+                  else
                   InkWell(
                     onTap: () => onAttachment(attachment),
                     child: Padding(
@@ -763,6 +812,140 @@ class _MessageBubble extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VoiceMessage extends StatefulWidget {
+  const _VoiceMessage({
+    required this.attachment,
+    required this.durationMilliseconds,
+    required this.mine,
+    required this.onDownload,
+  });
+
+  final ConnectAttachment attachment;
+  final int durationMilliseconds;
+  final bool mine;
+  final Future<String> Function(ConnectAttachment) onDownload;
+
+  @override
+  State<_VoiceMessage> createState() => _VoiceMessageState();
+}
+
+class _VoiceMessageState extends State<_VoiceMessage> {
+  final AudioPlayer _player = AudioPlayer();
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  bool _playing = false;
+  bool _loading = false;
+  String? _path;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<void>? _completeSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _duration = Duration(milliseconds: widget.durationMilliseconds);
+    _positionSubscription = _player.onPositionChanged.listen((value) {
+      if (mounted) setState(() => _position = value);
+    });
+    _durationSubscription = _player.onDurationChanged.listen((value) {
+      if (mounted) setState(() => _duration = value);
+    });
+    _completeSubscription = _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _position = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _completeSubscription?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_loading) return;
+    if (_playing) {
+      await _player.pause();
+      if (mounted) setState(() => _playing = false);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      _path ??= widget.attachment.localPath ??
+          await widget.onDownload(widget.attachment);
+      await _player.play(DeviceFileSource(_path!));
+      if (mounted) setState(() => _playing = true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _time(Duration value) {
+    final minutes = value.inMinutes.toString().padLeft(2, '0');
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.mine ? Colors.white : AppColors.purple;
+    final totalMs = _duration.inMilliseconds <= 0
+        ? 1
+        : _duration.inMilliseconds;
+    return SizedBox(
+      width: 260,
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: _toggle,
+            color: color,
+            icon: _loading
+                ? SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                  )
+                : Icon(_playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    activeTrackColor: color,
+                    inactiveTrackColor: color.withValues(alpha: .3),
+                    thumbColor: color,
+                  ),
+                  child: Slider(
+                    value: _position.inMilliseconds.clamp(0, totalMs).toDouble(),
+                    max: totalMs.toDouble(),
+                    onChanged: (value) =>
+                        _player.seek(Duration(milliseconds: value.round())),
+                  ),
+                ),
+                Text(
+                  '${_time(_position)} / ${_time(_duration)}',
+                  style: TextStyle(color: color.withValues(alpha: .8), fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.mic_rounded, color: color, size: 19),
+        ],
       ),
     );
   }

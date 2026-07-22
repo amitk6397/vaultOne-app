@@ -15,6 +15,9 @@ class PasswordVaultCard extends StatelessWidget {
     required this.onFavorite,
     required this.onArchive,
     required this.onDelete,
+    this.selected = false,
+    this.selectionMode = false,
+    this.onSelect,
   });
 
   final PasswordEntry entry;
@@ -23,6 +26,9 @@ class PasswordVaultCard extends StatelessWidget {
   final VoidCallback onFavorite;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
+  final bool selected;
+  final bool selectionMode;
+  final VoidCallback? onSelect;
 
   Color get _accent {
     return switch (entry.category) {
@@ -40,13 +46,19 @@ class PasswordVaultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
+    return GestureDetector(
+      onLongPress: onSelect,
+      onTap: selectionMode ? onSelect : null,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.outlineVariant),
+        border: Border.all(
+          color: selected ? AppColors.purple : colors.outlineVariant,
+          width: selected ? 2 : 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: isDark
@@ -134,6 +146,9 @@ class PasswordVaultCard extends StatelessWidget {
             ),
           ),
           IconButton(onPressed: onCopy, icon: const Icon(Icons.copy_rounded)),
+          if (selected)
+            const Icon(Icons.check_circle_rounded, color: AppColors.purple)
+          else
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'edit') onEdit();
@@ -165,6 +180,7 @@ class PasswordVaultCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
       ),
     );
   }

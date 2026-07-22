@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/legacy.dart';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../constants/auth_constants.dart';
@@ -80,16 +81,9 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
   }
 
   Future<void> clearSession({required bool deleteSavedData}) async {
-    try {
-      await _notifications.unregisterStoredToken();
-    } catch (_) {
-      // Logout must continue when notification token cleanup is unavailable.
-    }
-    try {
-      await _repository.logout();
-    } catch (_) {
-      // Local logout must still complete when analytics/network is unavailable.
-    }
+    // Start best-effort server cleanup, but never await network before clearing
+    // the local session. Logout must work instantly while offline too.
+    unawaited(_bestEffortRemoteLogout());
     final prefs = await SharedPreferences.getInstance();
     await SecureTokenStore.instance.clear();
     await prefs.remove('user_id');
@@ -108,6 +102,17 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
       if (onboardingCompleted) {
         await prefs.setBool(AuthConstants.onboardingCompletedKey, true);
       }
+    }
+  }
+
+  Future<void> _bestEffortRemoteLogout() async {
+    try {
+      await Future.wait([
+        _notifications.unregisterStoredToken(),
+        _repository.logout(),
+      ]).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // The local session is authoritative for signing out this device.
     }
   }
 

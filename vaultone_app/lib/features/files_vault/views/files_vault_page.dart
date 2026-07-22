@@ -214,6 +214,7 @@ class FilesVaultPage extends ConsumerWidget {
       context,
       ref,
       StorageModule.fileVault,
+      force: true,
     );
     if (storage == null || !context.mounted) return;
     final result = await FilePicker.pickFiles(
@@ -260,6 +261,7 @@ class FilesVaultPage extends ConsumerWidget {
       context,
       ref,
       StorageModule.fileVault,
+      force: true,
     );
     if (storage == null || !context.mounted) return;
     final picker = ImagePicker();

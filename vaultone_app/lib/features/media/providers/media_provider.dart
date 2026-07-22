@@ -11,6 +11,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../constants/app_colors.dart';
+import '../../../constants/app_url.dart';
 import '../../../core/storage/module_storage_controller.dart';
 import '../models/media_item.dart';
 import '../repositories/media_repository.dart';
@@ -84,7 +85,6 @@ class MediaLibraryState {
 }
 
 class MediaLibraryController extends StateNotifier<MediaLibraryState> {
-  static const privatePhotoLimit = 10;
   static const privateVideoLimitMb = 500.0;
   static const _videoSnapshotInitializedKey =
       'video_folder_snapshot_initialized';
@@ -106,6 +106,7 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
   final Map<String, AssetPathEntity> _videoPaths = {};
   static const _videoStorageKey = 'private_video_storage';
   static const _privateVideosKey = 'private_video_items';
+  static const _privatePhotosKey = 'private_photo_items';
   static const _photoBiometricsKey = 'photo_biometrics_enabled';
   static const _videoBiometricsKey = 'video_biometrics_enabled';
 
@@ -417,10 +418,6 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
 
   String? privateMoveBlockReason(MediaItem item) {
     if (item.visibility == MediaVisibility.private) return null;
-    if (item.kind == MediaKind.photo &&
-        privatePhotoCount >= privatePhotoLimit) {
-      return 'Private photos limit is $privatePhotoLimit. Remove one first.';
-    }
     if (item.kind == MediaKind.video &&
         privateVideoUsedMb + item.sizeMb > privateVideoLimitMb) {
       final left = (privateVideoLimitMb - privateVideoUsedMb).clamp(
@@ -563,6 +560,121 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
   }
 
   void clearSelection() => state = state.copyWith(selectedIds: {});
+
+  void deleteSelected(MediaKind kind) {
+    final ids = state.items
+        .where(
+          (item) => state.selectedIds.contains(item.id) && item.kind == kind,
+        )
+        .map((item) => item.id)
+        .toSet();
+    state = state.copyWith(
+      items: state.items.where((item) => !ids.contains(item.id)).toList(),
+      selectedIds: {},
+    );
+    for (final id in ids) {
+      unawaited(_deleteRemote(id));
+    }
+    unawaited(_persistPrivateVideos());
+    unawaited(_persistPrivatePhotos());
+  }
+
+  Future<void> loadPrivatePhotos() async {
+    final raw = (await SharedPreferences.getInstance()).getString(
+      _privatePhotosKey,
+    );
+    final restored = <MediaItem>[];
+    if (raw != null) {
+      for (final value
+          in (jsonDecode(raw) as List).cast<Map<String, dynamic>>()) {
+        final path = value['path'] as String;
+        if (!await File(path).exists()) continue;
+        restored.add(_persistedPhoto(value, path));
+      }
+    }
+    state = state.copyWith(
+      items: [
+        ...restored,
+        ...state.items.where(
+          (item) =>
+              item.kind != MediaKind.photo ||
+              !restored.any((saved) => saved.id == item.id),
+        ),
+      ],
+    );
+    await loadRemoteMedia();
+  }
+
+  MediaItem _persistedPhoto(Map<String, dynamic> value, String path) =>
+      MediaItem(
+        id: value['id'] as String,
+        title: value['title'] as String,
+        kind: MediaKind.photo,
+        visibility: MediaVisibility.private,
+        albumId: value['albumId'] as String? ?? 'private-photos',
+        albumName: value['albumName'] as String? ?? 'Private Photos',
+        folderName: value['folderName'] as String? ?? 'Private Vault',
+        createdAt: DateTime.parse(value['createdAt'] as String),
+        sizeMb: (value['sizeMb'] as num).toDouble(),
+        accent: AppColors.blue,
+        path: path,
+        isFavorite: value['isFavorite'] == true,
+        isHidden: value['isHidden'] == true,
+        isDeleted: value['isDeleted'] == true,
+      );
+
+  Future<void> loadRemoteMedia() async {
+    try {
+      final values = await _repository.fetchMedia();
+      final remote = values
+          .where((value) => value['file_path']?.toString().isNotEmpty == true)
+          .map(_remoteMediaItem)
+          .toList();
+      final remoteIds = remote.map((item) => item.id).toSet();
+      state = state.copyWith(
+        items: [
+          ...remote,
+          ...state.items.where((item) => !remoteIds.contains(item.id)),
+        ],
+      );
+    } catch (_) {
+      // Keep locally available media when the device is offline.
+    }
+  }
+
+  MediaItem _remoteMediaItem(Map<String, dynamic> value) {
+    final kind = value['kind'] == 'video' ? MediaKind.video : MediaKind.photo;
+    return MediaItem(
+      id: value['local_id'].toString(),
+      title: value['title']?.toString() ?? 'Media',
+      kind: kind,
+      visibility: value['visibility'] == 'public'
+          ? MediaVisibility.public
+          : MediaVisibility.private,
+      albumId: value['album_id']?.toString() ?? '',
+      albumName: value['album_name']?.toString() ?? '',
+      folderName: value['folder_name']?.toString() ?? '',
+      createdAt: DateTime.tryParse(
+            value['client_created_at']?.toString() ?? '',
+          ) ??
+          DateTime.tryParse(value['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+      sizeMb: (value['size_mb'] as num?)?.toDouble() ?? 0,
+      accent: kind == MediaKind.photo ? AppColors.blue : AppColors.purple,
+      path: value['file_path']?.toString(),
+      duration: value['duration_seconds'] == null
+          ? null
+          : Duration(seconds: (value['duration_seconds'] as num).toInt()),
+      lastPosition: value['last_position_seconds'] == null
+          ? null
+          : Duration(
+              seconds: (value['last_position_seconds'] as num).toInt(),
+            ),
+      isFavorite: value['is_favorite'] == true,
+      isHidden: value['is_hidden'] == true,
+      isDeleted: value['is_deleted'] == true,
+    );
+  }
 
   void toggleFavorite(String id) {
     final updated = _updateItem(
@@ -762,22 +874,26 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
     MediaVisibility visibility = MediaVisibility.private,
     ModuleStorageTarget storage = ModuleStorageTarget.local,
   }) async {
-    if (visibility == MediaVisibility.private &&
-        privatePhotoCount >= privatePhotoLimit) {
-      return 0;
-    }
-
     final picker = ImagePicker();
     final images = await picker.pickMultiImage(imageQuality: 88);
     if (images.isEmpty) return 0;
 
-    final allowedImages = visibility == MediaVisibility.private
-        ? images.take(privatePhotoLimit - privatePhotoCount)
-        : images;
+    final allowedImages = images;
     final additions = <MediaItem>[];
     var index = 0;
+    final directory = Directory(
+      p.join((await getApplicationSupportDirectory()).path, 'private_photos'),
+    );
+    await directory.create(recursive: true);
     for (final image in allowedImages) {
-      final sizeMb = await _sizeMb(File(image.path));
+      final source = File(image.path);
+      final stored = await source.copy(
+        p.join(
+          directory.path,
+          '${DateTime.now().microsecondsSinceEpoch}-$index${p.extension(image.path)}',
+        ),
+      );
+      final sizeMb = await _sizeMb(stored);
       additions.add(
         MediaItem(
           id: 'photo-${DateTime.now().microsecondsSinceEpoch}-$index',
@@ -796,7 +912,7 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
           createdAt: DateTime.now(),
           sizeMb: sizeMb,
           accent: mediaAccentForIndex(index),
-          path: image.path,
+          path: stored.path,
         ),
       );
       index++;
@@ -804,12 +920,44 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
 
     if (additions.isEmpty) return 0;
     state = state.copyWith(items: [...additions, ...state.items]);
+    await _persistPrivatePhotos();
     if (storage == ModuleStorageTarget.database) {
       for (final item in additions) {
-        unawaited(_syncRemote(item));
+        await _syncRemote(item);
       }
     }
     return additions.length;
+  }
+
+  Future<void> _persistPrivatePhotos() async {
+    final values = state.items
+        .where(
+          (item) =>
+              item.kind == MediaKind.photo &&
+              item.isPrivate &&
+              item.path != null &&
+              !AppUrl.isNetworkResourceUrl(item.path!),
+        )
+        .map(
+          (item) => {
+            'id': item.id,
+            'title': item.title,
+            'path': item.path,
+            'albumId': item.albumId,
+            'albumName': item.albumName,
+            'folderName': item.folderName,
+            'createdAt': item.createdAt.toIso8601String(),
+            'sizeMb': item.sizeMb,
+            'isFavorite': item.isFavorite,
+            'isHidden': item.isHidden,
+            'isDeleted': item.isDeleted,
+          },
+        )
+        .toList();
+    await (await SharedPreferences.getInstance()).setString(
+      _privatePhotosKey,
+      jsonEncode(values),
+    );
   }
 
   Future<void> importReceivedMedia({
@@ -1003,6 +1151,7 @@ class MediaLibraryController extends StateNotifier<MediaLibraryState> {
     }
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_privateVideosKey);
+    await preferences.remove(_privatePhotosKey);
     await preferences.remove(_videoStorageKey);
     state = state.copyWith(
       items: const [],

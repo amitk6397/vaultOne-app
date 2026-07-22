@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import cloudinary.uploader
@@ -54,7 +54,9 @@ def signed_private_download_url(storage_key: str, file_name: str) -> str:
         resource_type="raw",
         type="authenticated",
         attachment=file_name,
-        expires_at=int((datetime.utcnow() + timedelta(minutes=5)).timestamp()),
+        # A naive UTC datetime is interpreted as local time by timestamp(),
+        # producing an already-expired URL on non-UTC servers.
+        expires_at=int((datetime.now(timezone.utc) + timedelta(minutes=5)).timestamp()),
     )
 
 

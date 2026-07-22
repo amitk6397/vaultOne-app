@@ -1,11 +1,13 @@
 import asyncio
+import urllib.request
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+import cloudinary.api
+from fastapi.responses import FileResponse, Response
 from jose import JWTError, jwt
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,12 +32,12 @@ from src.user.connect.storage import (
     finalize_private_upload,
     is_cloud_key,
     local_relative_key,
-    signed_private_download_url,
 )
 from src.user.connect.service import (
     attachment_data, check_access, config, conversation_data, create_report,
     delete_message, direct_conversation, discover_contacts, is_blocked,
     list_conversations, list_messages, mark_receipt, message_data,
+    unread_message_count,
     other_participant, participant_ids, private_storage_key, require_member,
     safe_filename, send_message, sha256_file, validate_upload, verify_magic,
 )
@@ -43,6 +45,13 @@ from src.user.connect.service import (
 router = APIRouter(tags=["vault-connect"])
 STORAGE_ROOT = Path(__file__).resolve().parents[3] / "private_uploads" / "vault_connect"
 STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+def _fetch_private_cloud_file(url: str) -> bytes:
+    # Keep Cloudinary's authenticated URL server-side. The mobile client only
+    # receives a membership-checked, five-minute VaultOne download token.
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return response.read()
 
 
 class RateLimiter:
@@ -122,8 +131,12 @@ async def create_message(payload: SendMessageRequest, db: AsyncSession = Depends
     message, recipients = await send_message(db, user.id, payload)
     data = await message_data(db, message, user.id)
     await manager.emit_conversation(message.conversation_id, [user.id, *recipients], "message.created", data)
+    await manager.emit_summaries(db, message.conversation_id, [user.id, *recipients])
     for recipient in recipients:
-        if not manager.online(recipient):
+        if (
+            not manager.online(recipient)
+            and await unread_message_count(db, message.conversation_id, recipient) == 1
+        ):
             await send_event_push(db, title="VaultOne", body="You received a secure message", user_id=recipient, event_type="vault_connect_message", data={"type": "VAULT_CONNECT_MESSAGE", "conversationId": message.conversation_id, "messageId": message.id})
     return DataResponse(message="Message sent", data=data)
 
@@ -134,6 +147,7 @@ async def _receipt(message_id: str, read: bool, db: AsyncSession, user: User) ->
     event = "message.read" if read else "message.delivered"
     data = {"message_id": message_id, "user_id": user.id, "delivered_at": receipt.delivered_at, "read_at": receipt.read_at}
     await manager.emit_user(message.sender_user_id, event, data)
+    await manager.emit_summaries(db, message.conversation_id, [user.id, message.sender_user_id])
     return DataResponse(message=f"Message {event.split('.')[-1]}", data=data)
 
 
@@ -266,12 +280,6 @@ async def download_url(attachment_id: str, db: AsyncSession = Depends(get_db), u
     if not item or item.upload_status != AttachmentStatus.complete or item.deleted_at:
         raise HTTPException(404, "Attachment not found")
     await require_member(db, item.conversation_id, user.id)
-    if is_cloud_key(item.storage_key):
-        return DataResponse(message="Short-lived download URL created", data={
-            "url": signed_private_download_url(item.storage_key, item.file_name),
-            "expires_in_seconds": 300,
-            "checksum": item.checksum,
-        })
     token = _download_token(attachment_id, user.id)
     return DataResponse(message="Short-lived download URL created", data={"url": f"/api/v1/attachments/{attachment_id}/download?token={token}", "expires_in_seconds": 300, "checksum": item.checksum})
 
@@ -289,6 +297,32 @@ async def download_attachment(attachment_id: str, token: str, db: AsyncSession =
     if not item or item.deleted_at or item.upload_status != AttachmentStatus.complete:
         raise HTTPException(404, "Attachment not found")
     await require_member(db, item.conversation_id, user_id)
+    if is_cloud_key(item.storage_key):
+        public_id = item.storage_key.removeprefix("cloudinary:")
+        try:
+            resource = await asyncio.to_thread(
+                cloudinary.api.resource,
+                public_id,
+                resource_type="raw",
+                type="authenticated",
+            )
+            content = await asyncio.to_thread(
+                _fetch_private_cloud_file, resource["secure_url"]
+            )
+        except Exception as error:
+            raise HTTPException(
+                502, "Secure attachment storage is unavailable"
+            ) from error
+        return Response(
+            content=content,
+            media_type=item.mime_type,
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{safe_filename(item.file_name)}"'
+                ),
+                "Cache-Control": "private, no-store",
+            },
+        )
     path = STORAGE_ROOT / local_relative_key(item.storage_key)
     if not path.is_file():
         raise HTTPException(410, "Attachment is no longer available")
